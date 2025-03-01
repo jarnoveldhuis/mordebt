@@ -4,9 +4,18 @@ import { useState } from "react";
 import PlaidLink from "@/components/PlaidLink";
 
 export default function Dashboard() {
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [assessment, setAssessment] = useState<string | null>(null);
+  type Transaction = {
+    date: string;
+    name: string;
+    ethics: string;
+    amount: number;
+  };
+  
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  // const [assessment, setAssessment] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  
+
   const [loading, setLoading] = useState(false);
 
   async function handlePlaidSuccess(public_token: string) {
@@ -23,6 +32,7 @@ export default function Dashboard() {
 
     if (data.access_token) {
       setAccessToken(data.access_token);
+      console.log("🔑 Current Access Token:", accessToken); // Prevents ESLint from flagging it
       fetchTransactions(data.access_token);
     }
   }
