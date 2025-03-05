@@ -1,3 +1,5 @@
+// src/app/api/plaid/transactions/route.ts
+
 import { NextResponse } from 'next/server';
 import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
 
@@ -23,7 +25,10 @@ export async function POST(req: Request) {
       end_date: '2024-12-31',
     });
 
-    return NextResponse.json(response.data.transactions);
+    // ✅ Filter out negative transactions
+    const filteredTransactions = response.data.transactions.filter((t) => t.amount > 0);
+
+    return NextResponse.json(filteredTransactions);
   } catch (error) {
     console.error('Plaid Transactions Error:', error);
     return NextResponse.json({ error: 'Failed to fetch transactions' }, { status: 500 });

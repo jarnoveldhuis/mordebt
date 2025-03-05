@@ -1,3 +1,5 @@
+// src/components/PlaidLink.tsx
+
 'use client';
 
 import { useEffect, useState } from 'react';
