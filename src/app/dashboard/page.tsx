@@ -5,24 +5,8 @@ import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { auth } from "@/firebase/firebase";
 import PlaidLink from "@/components/PlaidLink";
-
-
-// We'll define the interface types outside the component
-interface Transaction {
-  date: string;
-  name: string;
-  amount: number;
-  societalDebt: number;
-  unethicalPractices: string[];
-  ethicalPractices: string[];
-  information?: string;
-  charities: Record<string, { name: string; url: string }>;
-  practiceDebts?: Record<string, number>; // + or -
-  practiceWeights?: Record<string, number>; // percentages
-}
-
-
-
+import { Transaction } from '@/types/transactions';
+import { config } from "@/config/index"
 
 interface Charity {
   name: string;

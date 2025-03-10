@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
+import { config } from "@/config";
 
 declare global {
   interface Window {
@@ -9,16 +9,10 @@ declare global {
       create: (config: {
         token: string;
         onSuccess: (public_token: string) => void;
-        onExit: (error?: PlaidError) => void;
+        onExit: (error?: any) => void;
       }) => { open: () => void };
     };
   }
-}
-
-interface PlaidError {
-  error_code: string;
-  error_message: string;
-  display_message: string | null;
 }
 
 interface PlaidLinkProps {
@@ -32,9 +26,9 @@ export default function PlaidLink({ onSuccess }: PlaidLinkProps) {
   useEffect(() => {
     async function fetchLinkToken() {
       try {
-        if (process.env.PLAID_ENV === "sandbox") {
+        if (config.plaid.isSandbox) {
           console.warn("⚠️ Bypassing Plaid UI in Sandbox mode.");
-          return; // ✅ No need to fetch link token in Sandbox
+          return; // No need to fetch link token in Sandbox
         }
 
         const response = await fetch("/api/plaid/create_link_token", { method: "GET" });
@@ -50,7 +44,7 @@ export default function PlaidLink({ onSuccess }: PlaidLinkProps) {
   }, []);
 
   async function openPlaidLink() {
-    if (process.env.PLAID_ENV === "sandbox") {
+    if (config.plaid.isSandbox) {
       setLoading(true);
       try {
         console.warn("⚡ Fetching sandbox token from API...");
@@ -72,7 +66,6 @@ export default function PlaidLink({ onSuccess }: PlaidLinkProps) {
       return;
     }
   
-    // ✅ Open Plaid UI in Production
     if (!linkToken) return;
   
     const handler = window.Plaid.create({
@@ -81,14 +74,13 @@ export default function PlaidLink({ onSuccess }: PlaidLinkProps) {
         console.log("✅ Plaid Success! public_token:", public_token);
         onSuccess(public_token);
       },
-      onExit: (error?: PlaidError) => {
+      onExit: (error?: any) => {
         if (error) console.error("❌ Plaid Link Exit Error:", error);
       },
     });
   
     handler.open();
   }
-  
 
   return (
     <button
