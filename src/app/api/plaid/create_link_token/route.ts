@@ -9,7 +9,10 @@ import {
 } from "plaid";
 
 const PLAID_CLIENT_ID = process.env.PLAID_CLIENT_ID;
-const PLAID_SECRET = process.env.PLAID_SECRET;
+const PLAID_SECRET =
+process.env.PLAID_ENV === "sandbox"
+  ? process.env.PLAID_SECRET_SANDBOX
+  : process.env.PLAID_SECRET_PRODUCTION;
 const PLAID_ENV = process.env.PLAID_ENV as keyof typeof PlaidEnvironments;
 
 if (!PLAID_CLIENT_ID || !PLAID_SECRET || !PLAID_ENV) {
@@ -33,7 +36,7 @@ export async function GET() {
 
     const response = await plaidClient.linkTokenCreate({
       user: { client_user_id: crypto.randomUUID() }, // ✅ Ensure unique user ID
-      client_name: "Your App Name",
+      client_name: "Mordebt",
       products: [Products.Transactions], // ✅ Ensure valid product
       country_codes: [CountryCode.Us], // ✅ Ensure valid country code
       language: "en",
@@ -46,9 +49,9 @@ export async function GET() {
     console.log("✅ Plaid Link Token Created:", response.data.link_token);
     return NextResponse.json({ link_token: response.data.link_token });
   } catch (error: unknown) {
-    console.error("❌ Plaid API Error:", JSON.stringify(error, null, 2)); // Log full error
+    console.error("❌ Plaid API Error:", error instanceof Error ? error.message : error);
     return NextResponse.json(
-      { error: "Failed to create link token", details: error },
+      { error: "Plaid API request failed", details: error instanceof Error ? error.message : error },
       { status: 500 }
     );
   }

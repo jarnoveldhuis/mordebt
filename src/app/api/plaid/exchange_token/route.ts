@@ -1,12 +1,17 @@
 import { NextResponse } from 'next/server';
 import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
 
+const PLAID_SECRET =
+process.env.PLAID_ENV === "sandbox"
+  ? process.env.PLAID_SECRET_SANDBOX
+  : process.env.PLAID_SECRET_PRODUCTION;
+
 const config = new Configuration({
   basePath: PlaidEnvironments[process.env.PLAID_ENV as keyof typeof PlaidEnvironments],
   baseOptions: {
     headers: {
       'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID!,
-      'PLAID-SECRET': process.env.PLAID_SECRET!,
+      'PLAID-SECRET': PLAID_SECRET!,
     },
   },
 });
@@ -42,6 +47,7 @@ export async function POST(req: Request) {
     // Exchange public_token for access_token
     const response = await plaidClient.itemPublicTokenExchange({ public_token });
     const access_token = response.data.access_token;
+    console.log("✅ Access Token Received:", access_token);
 
     return NextResponse.json({ access_token });
   } catch (error) {
