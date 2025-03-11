@@ -59,26 +59,30 @@ export async function analyzeTransactions(transactions: Transaction[]) {
     const practiceDebts: Record<string, number> = {};
     let newSocietalDebt = 0;
 
+    // Ensure all necessary properties exist
+    const unethicalPractices = t.unethicalPractices || [];
+    const ethicalPractices = t.ethicalPractices || [];
+    const practiceWeights = t.practiceWeights || {};
+    const information = t.information || {};
+
     // Unethical practices => always positive contributions
-    t.unethicalPractices?.forEach((practice) => {
-      const weight = t.practiceWeights?.[practice] ?? 100;
+    unethicalPractices.forEach((practice) => {
+      const weight = practiceWeights[practice] ?? 100;
       const portion = t.amount * (weight / 100);
       practiceDebts[practice] = portion;
       newSocietalDebt += portion;
     });
 
     // Ethical practices => always negative contributions
-    t.ethicalPractices?.forEach((practice) => {
-      const weight = t.practiceWeights?.[practice] ?? 100;
+    ethicalPractices.forEach((practice) => {
+      const weight = practiceWeights[practice] ?? 100;
       const portion = t.amount * (weight / 100);
       practiceDebts[practice] = -portion;
       newSocietalDebt -= portion;
     });
 
-    // Fallback if there were no practices
-    const hasPractices =
-      (t.unethicalPractices?.length || 0) + (t.ethicalPractices?.length || 0);
-    if (!hasPractices) {
+    // If no practices, set debt to 0
+    if (unethicalPractices.length === 0 && ethicalPractices.length === 0) {
       newSocietalDebt = 0;
     }
 
@@ -86,6 +90,10 @@ export async function analyzeTransactions(transactions: Transaction[]) {
       ...t,
       societalDebt: newSocietalDebt,
       practiceDebts,
+      unethicalPractices,
+      ethicalPractices,
+      practiceWeights,
+      information
     };
   });
 

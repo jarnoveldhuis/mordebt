@@ -12,17 +12,26 @@ export function useAuth() {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setLoading(false);
-      if (!currentUser) router.push('/signin');
+      
+      // Redirect to sign-in if no user and not already on sign-in page
+      if (!currentUser && window.location.pathname !== '/signin') {
+        router.push('/signin');
+      }
     });
+    
+    // Cleanup subscription on unmount
     return () => unsubscribe();
   }, [router]);
   
   const logout = async () => {
     try {
+      setLoading(true);
       await signOut(auth);
       router.push('/signin');
     } catch (error) {
       console.error("Logout error:", error);
+    } finally {
+      setLoading(false);
     }
   };
   

@@ -1,47 +1,40 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { useRouter } from "next/navigation";
-import { auth } from "@/firebase/firebase";
-import PlaidLink from "@/components/PlaidLink";
 import { Transaction } from '@/types/transactions';
-import { config } from "@/config/index"
-
-interface Charity {
-  name: string;
-  url: string;
-}
+import { useAuth } from "@/hooks/useAuth";
+import { Header } from "@/components/dashboard/Header";
+import { PlaidConnectionSection } from "@/components/dashboard/PlaidConnectionSection";
+import { TransactionList } from "@/components/dashboard/TransactionList";
+import { PracticeDebtTable } from "@/components/dashboard/PracticeDebtTable";
+import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { config } from "@/config/index";
 
 export default function Dashboard() {
-  // ------------------ 1) All useState hooks at the top ------------------
   const router = useRouter();
+  const { user, loading: authLoading, logout } = useAuth();
 
-  // Auth states
-  const [user, setUser] = useState<User | null>(null);
-
-  // Existing “dashboard” states
+  // State management
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [totalSocietalDebt, setTotalSocietalDebt] = useState<number | null>(
-    null
-  );
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [selectedCharity, _setSelectedCharity] = useState<string | null>(null);
+  const [totalSocietalDebt, setTotalSocietalDebt] = useState<number | null>(null);
+  const [selectedCharity, setSelectedCharity] = useState<string | null>(null);
   const [practiceDonations, setPracticeDonations] = useState<
-    Record<string, { charity: Charity | null; amount: number }>
+    Record<string, { charity: { name: string; url: string } | null; amount: number }>
   >({});
   const [debtPercentage, setDebtPercentage] = useState<number | null>(null);
   const [bankConnected, setBankConnected] = useState(false);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisCompleted, setAnalysisCompleted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Refs
+  // Refs to prevent duplicate calls
   const isAnalyzing = useRef(false);
+  const isAnalyzingManually = useRef(false);
 
-  // ----------------------------------------------------------------------
-  // 2) Utility function for color coding
+  // Utility functions
   function getColorClass(value: number) {
     if (value < 0) return "text-green-500";
     if (value === 0) return "text-blue-500";
@@ -51,29 +44,33 @@ export default function Dashboard() {
     return "text-red-700";
   }
 
-  // ----------------------------------------------------------------------
-  // 3) Auth check: on mount, see if user is logged in; if not, redirect
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      if (!currentUser) {
-        router.push("/signin"); // or show a "Please log in" screen
-      } else {
-        setUser(currentUser);
-      }
-    });
-    return () => unsubscribe();
-  }, [router]);
-
-  // ----------------------------------------------------------------------
-  // 4) Data fetching and analysis Hooks / logic
-
-  // (A) handleAnalyze as a stable callback
+  // Core functionality
   const handleAnalyze = useCallback(
-    async (transactionsToAnalyze: Transaction[] = transactions) => {
-      if (analysisCompleted || transactionsToAnalyze.length === 0) return;
+    async (transactionsToAnalyze: Transaction[] = transactions, skipChecks = false) => {
+      // Check if we're already analyzing or if analysis has been completed (unless skipChecks is true)
+      if (!skipChecks && (analyzing || isAnalyzing.current)) {
+        console.log("Analysis already in progress, skipping...");
+        return;
+      }
 
+      if (!skipChecks && analysisCompleted) {
+        console.log("Analysis already completed, skipping...");
+        return;
+      }
+
+      if (transactionsToAnalyze.length === 0) {
+        console.log("No transactions to analyze, skipping...");
+        return;
+      }
+
+      // Set flags to prevent duplicate calls
       setAnalyzing(true);
+      isAnalyzing.current = true;
+      
       setTotalSocietalDebt(null);
+      setError(null);
+
+      console.log("Starting transaction analysis...");
 
       try {
         const response = await fetch("/api/analyze", {
@@ -81,6 +78,10 @@ export default function Dashboard() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ transactions: transactionsToAnalyze }),
         });
+
+        if (!response.ok) {
+          throw new Error("Failed to analyze transactions");
+        }
 
         const data = await response.json();
         if (data.transactions) {
@@ -91,6 +92,7 @@ export default function Dashboard() {
               unethicalPractices: t.unethicalPractices || [],
               ethicalPractices: t.ethicalPractices || [],
               charities: t.charities || {},
+              information: t.information || {},
             }))
             .sort(
               (a: Transaction, b: Transaction) =>
@@ -102,11 +104,11 @@ export default function Dashboard() {
           let totalDebt = 0;
           const newPracticeDonations: Record<
             string,
-            { charity: Charity | null; amount: number }
+            { charity: { name: string; url: string } | null; amount: number }
           > = {};
 
           data.transactions.forEach((tx: Transaction) => {
-            totalDebt += tx.societalDebt;
+            totalDebt += tx.societalDebt || 0;
             Object.entries(tx.practiceDebts || {}).forEach(
               ([practice, amount]) => {
                 const assignedCharity = tx.charities?.[practice] || null;
@@ -125,47 +127,60 @@ export default function Dashboard() {
           setTotalSocietalDebt(totalDebt);
           setPracticeDonations(newPracticeDonations);
           setAnalysisCompleted(true);
+          console.log("Analysis completed successfully");
         }
       } catch (error) {
         console.error("❌ Error in handleAnalyze:", error);
+        setError(error instanceof Error ? error.message : "Failed to analyze transactions");
+      } finally {
+        setAnalyzing(false);
+        isAnalyzing.current = false;
+        isAnalyzingManually.current = false;
       }
-
-      setAnalyzing(false);
     },
-    [transactions, analysisCompleted]
+    [transactions, analysisCompleted, analyzing]
   );
 
-  // (B) Automatic analysis effect
+  // This effect only runs when transactions change and analysis hasn't been done
   useEffect(() => {
-    // If we have transactions, and we haven't analyzed yet, run handleAnalyze
-    if (transactions.length > 0 && !analysisCompleted && !isAnalyzing.current) {
-      isAnalyzing.current = true;
-      handleAnalyze();
+    // Only run auto-analysis if we're not manually analyzing and it hasn't been completed
+    if (
+      transactions.length > 0 && 
+      !analysisCompleted && 
+      !isAnalyzing.current && 
+      !isAnalyzingManually.current
+    ) {
+      console.log("Auto-triggering analysis from useEffect...");
+      isAnalyzingManually.current = true; // Prevent the fetchTransactions from triggering again
+      handleAnalyze(transactions, true); // Pass true to skip the checks
     }
   }, [transactions, analysisCompleted, handleAnalyze]);
-
-  // (C) handlePlaidSuccess
+  
   async function handlePlaidSuccess(public_token?: string) {
     try {
       setBankConnected(true);
       setLoadingTransactions(true);
+      setError(null);
 
-      // In sandbox mode, auto-generate a token
-      if (!public_token && process.env.PLAID_ENV === "sandbox") {
+      // In sandbox mode, auto-generate a token if not provided
+      if (!public_token && config.plaid.isSandbox) {
         console.log("⚡ Bypassing Plaid UI in Sandbox...");
-        const sandboxResponse = await fetch(
-          "https://sandbox.plaid.com/sandbox/public_token/create",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              institution_id: "ins_109508",
-              initial_products: ["transactions"],
-            }),
+        try {
+          const sandboxResponse = await fetch("/api/plaid/sandbox_token", {
+            method: "POST"
+          });
+          
+          if (!sandboxResponse.ok) {
+            throw new Error("Failed to generate sandbox token");
           }
-        );
-        const sandboxData = await sandboxResponse.json();
-        public_token = sandboxData.public_token;
+          
+          const sandboxData = await sandboxResponse.json();
+          public_token = sandboxData.public_token;
+          console.log("✅ Generated Sandbox Public Token");
+        } catch (error) {
+          console.error("❌ Error generating sandbox token:", error);
+          throw new Error("Failed to generate sandbox token");
+        }
       }
 
       const response = await fetch("/api/plaid/exchange_token", {
@@ -174,19 +189,28 @@ export default function Dashboard() {
         body: JSON.stringify({ public_token }),
       });
 
+      if (!response.ok) {
+        throw new Error("Failed to exchange Plaid token");
+      }
+
       const data = await response.json();
       if (data.access_token) {
-        console.log("✅ Received Plaid Access Token:", data.access_token);
+        console.log("✅ Received Plaid Access Token");
         fetchTransactions(data.access_token);
+      } else {
+        throw new Error("No access token received from Plaid");
       }
     } catch (error) {
       console.error("❌ Error in handlePlaidSuccess:", error);
+      setError(error instanceof Error ? error.message : "Failed to connect bank account");
+      setBankConnected(false);
+      setLoadingTransactions(false);
     }
   }
 
-  // (D) fetchTransactions
   async function fetchTransactions(token: string) {
     setLoadingTransactions(true);
+    setError(null);
     let productNotReady = false;
 
     try {
@@ -200,33 +224,42 @@ export default function Dashboard() {
         productNotReady = true;
         const errorData = await response.json();
         console.warn("🚧 Transactions not ready:", errorData.error);
+        setError("Transactions data is not ready yet. Please wait a moment and try again.");
         // Optionally schedule an auto-retry in 10 seconds:
         setTimeout(() => fetchTransactions(token), 10000);
         return;
       }
 
       if (!response.ok) {
-        console.error(`❌ Server error: ${response.status}`);
-        return;
+        throw new Error(`Server error: ${response.status}`);
       }
 
       const data: Transaction[] = await response.json();
       if (Array.isArray(data) && data.length > 0) {
-        // ...update transactions
+        console.log(`Loaded ${data.length} transactions from Plaid`);
+        
+        // Set the transactions but DO NOT trigger analysis here
         setTransactions(
           data.map((t) => ({
             ...t,
             societalDebt: 0,
             unethicalPractices: t.unethicalPractices || [],
             ethicalPractices: t.ethicalPractices || [],
+            information: t.information || {}
           }))
         );
+        
+        // Reset analysis state
         setAnalysisCompleted(false);
+        
+        // Let the useEffect trigger the analysis instead
       } else {
         console.warn("⚠️ No transactions found.");
+        setError("No transactions found in your account.");
       }
     } catch (error) {
       console.error("❌ Error in fetchTransactions:", error);
+      setError(error instanceof Error ? error.message : "Failed to fetch transactions");
     } finally {
       // Only stop spinner if it wasn't "PRODUCT_NOT_READY"
       if (!productNotReady) {
@@ -235,264 +268,67 @@ export default function Dashboard() {
     }
   }
 
-  // ----------------------------------------------------------------------
-  // 5) Logout logic
-  async function handleLogout() {
-    try {
-      await signOut(auth);
-      router.push("/signin");
-    } catch (error) {
-      console.error("Logout error:", error);
+  // Auto-connect in sandbox mode
+  useEffect(() => {
+    if (config.plaid.isSandbox && user && !bankConnected && !loadingTransactions) {
+      console.log("🏦 Auto-connecting in sandbox mode...");
+      handlePlaidSuccess(); // No token needed, will auto-generate one
     }
+  }, [user, bankConnected, loadingTransactions]);
+
+  // Render loading state during authentication check
+  if (authLoading) {
+    return <div className="text-center mt-10"><LoadingSpinner message="Checking authentication..." /></div>;
   }
 
-  // ----------------------------------------------------------------------
-  // 6) Conditional render AFTER all hooks have run
+  // Redirect if no user is found (this is handled by useAuth hook now)
   if (!user) {
-    // If user is null, we show a loading or redirecting UI
-    return <div className="text-center mt-10">Checking authentication...</div>;
+    return <div className="text-center mt-10">Redirecting to login...</div>;
   }
 
-  // ----------------------------------------------------------------------
-  // 7) Actual JSX once user is present
+  // Main render
   return (
     <div className="min-h-screen bg-gray-100 flex justify-center items-center">
       <div className="bg-white shadow-lg rounded-lg p-8 max-w-2xl w-full">
-        {/* Page Indicator & Logout */}
-        <div className="flex justify-between items-center mb-4">
-          <span className="text-sm text-gray-500">
-            {user.email}
-          </span>
-          <button
-            onClick={handleLogout}
-            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded shadow"
-          >
-            Logout
-          </button>
-        </div>
+        {/* Header with user info and logout */}
+        <Header user={user} onLogout={logout} />
 
         <h1 className="text-3xl font-bold text-gray-900 text-center mb-3">
           Societal Debt Calculator
         </h1>
 
-        {!bankConnected && (
-          <div className="flex justify-center mb-6">
-            <PlaidLink onSuccess={handlePlaidSuccess} />
-          </div>
+        {/* Error display */}
+        {error && <ErrorAlert message={error} />}
+
+        {/* Plaid connection section */}
+        {!bankConnected && !config.plaid.isSandbox && (
+          <PlaidConnectionSection onSuccess={handlePlaidSuccess} />
         )}
 
-        {/* Spinner if fetching transactions */}
+        {/* Loading states */}
         {bankConnected && loadingTransactions && (
-          <div className="flex justify-center items-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-blue-500"></div>
-            <span className="ml-2 text-gray-700">Loading transactions...</span>
-          </div>
+          <LoadingSpinner message="Loading transactions..." />
         )}
 
-        <div className="text-center text-lg font-semibold mb-4">
-          {analyzing ? (
-            <div className="flex justify-center items-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-blue-500"></div>
-              <span className="ml-2 text-gray-700">
-                Calculating your societal debt...
-              </span>
-            </div>
-          ) : (
-            <>
-              <p
-                className={`text-2xl font-bold ${getColorClass(
-                  debtPercentage || 0
-                )} text-center`}
-              >
-                {/* Potential overall debt label if desired */}
-              </p>
-            </>
-          )}
-        </div>
+        {analyzing && (
+          <LoadingSpinner message="Calculating your societal debt..." />
+        )}
 
-        {/* Transactions List */}
+        {/* Main content areas */}
         {transactions.length > 0 && !loadingTransactions && (
-          <div className="bg-gray-50 p-4 rounded-lg shadow-sm mt-4">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">
-              Your Transactions
-            </h2>
-            <ul className="space-y-2 max-h-60 overflow-y-auto">
-              {transactions.map((t, i) => {
-                const allBadges = [
-                  ...(t.unethicalPractices || []).map((practice) => ({
-                    text: `${practice} (${t.practiceWeights?.[practice]}%)`,
-                    type: "unethical",
-                  })),
-                  ...(t.ethicalPractices || []).map((practice) => ({
-                    text: `${practice} (${t.practiceWeights?.[practice]}%)`,
-                    type: "ethical",
-                  })),
-                ];
-
-                return (
-                  <li key={i} className="bg-white p-3 rounded-lg shadow-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-700">
-                        {t.date} - {t.name} - ${t.amount.toFixed(2)}
-                      </span>
-                      <span
-                        className={`font-semibold ${getColorClass(
-                          t.societalDebt
-                        )}`}
-                      >
-                        ${t.societalDebt.toFixed(2)}
-                      </span>
-                    </div>
-
-                    {allBadges.length > 0 && (
-                      <div className="mt-1 flex flex-wrap gap-2">
-                        {allBadges.map((badge, idx) => {
-                          const bgColor =
-                            badge.type === "unethical"
-                              ? "bg-red-200 text-red-700"
-                              : "bg-green-200 text-green-700";
-                          return (
-                            <span
-                              key={idx}
-                              className={`${bgColor} text-xs px-2 py-1 rounded-lg`}
-                            >
-                              {badge.text}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
+          <TransactionList 
+            transactions={transactions} 
+            getColorClass={getColorClass} 
+          />
         )}
 
-        {/* Aggregated Donation Table */}
         {totalSocietalDebt !== null && !analyzing && (
-          <div className="bg-gray-50 p-4 rounded-lg shadow-sm mt-4">
-            <div className="flex flex-col md:flex-row justify-between items-start border-t border-gray-300 pt-4">
-              {Object.keys(practiceDonations).length > 0 && (
-                <div className="w-full text-left">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="border-b border-gray-300">
-                        <th className="text-left text-gray-700 p-2">
-                          Practice
-                        </th>
-                        <th className="text-left text-gray-700 p-2">Charity</th>
-                        <th className="text-left text-gray-700 p-2">
-                          Information
-                        </th>
-                        <th className="text-right text-gray-700 p-2">Debt</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Object.entries(practiceDonations)
-                        .sort(([, a], [, b]) => b.amount - a.amount)
-                        .map(([practice, { charity, amount }], i) => {
-                          // Find matching transaction to get the 'information' field
-                          const transaction = transactions.find(
-                            (tx) => tx.practiceDebts?.[practice] !== undefined
-                          );
-
-
-                          return (
-                            <tr key={i} className="border-b border-gray-200">
-                              <td
-                                className={`p-2 font-medium ${
-                                  amount >= 0
-                                    ? "text-red-600"
-                                    : "text-green-600"
-                                }`}
-                              >
-                                {practice}
-                              </td>
-                              <td className="p-2">
-                                {charity ? (
-                                  <a
-                                    href={charity.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-blue-600 hover:underline font-medium"
-                                  >
-                                    {charity.name}
-                                  </a>
-                                ) : (
-                                  <span className="text-gray-500">—</span>
-                                )}
-                              </td>
-                              <td className="p-2">
-                                {transaction?.information ? (
-                                  <span className="text-gray-700">
-                                    {transaction.information}
-                                  </span>
-                                ) : (
-                                  <span className="text-gray-500">
-                                    No info available
-                                  </span>
-                                )}
-                              </td>
-
-                              <td
-                                className={`p-2 text-right font-bold ${
-                                  amount >= 0
-                                    ? "text-red-600"
-                                    : "text-green-600"
-                                }`}
-                              >
-                                ${amount?.toFixed(2) ?? "0.00"}
-                              </td>
-                            </tr>
-                          );
-                        })}
-
-                      {/* Total Debt Row */}
-                      {totalSocietalDebt !== null && (
-                        <tr className="border-t border-gray-300">
-                          <td
-                            colSpan={3}
-                            className="p-2 text-right font-semibold"
-                          >
-                            <a
-                              href={
-                                selectedCharity ||
-                                "https://www.charitynavigator.org"
-                              }
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="ml-4 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-bold shadow"
-                            >
-                              💳 Offset Impact
-                            </a>
-                          </td>
-                          <td
-                            className={`p-2 text-right font-bold ${
-                              totalSocietalDebt > 0
-                                ? "text-red-600"
-                                : "text-green-600"
-                            }`}
-                          >
-                            <h3 className="text-lg font-semibold text-gray-800">
-                              Total Debt:
-                            </h3>
-                            <p
-                              className={`text-${
-                                totalSocietalDebt > 0 ? "red-500" : "green-500"
-                              } text-2xl font-bold`}
-                            >
-                              ${totalSocietalDebt?.toFixed(2) || "Pending..."}
-                            </p>
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
+          <PracticeDebtTable
+            practiceDonations={practiceDonations}
+            transactions={transactions}
+            totalSocietalDebt={totalSocietalDebt}
+            selectedCharity={selectedCharity}
+          />
         )}
       </div>
     </div>

@@ -54,12 +54,11 @@ import {
   export async function getTransactions(accessToken: string) {
     try {
       const today = new Date();
-      const daysAgo = new Date();
-      daysAgo.setDate(today.getDate() - 7);
+      const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   
       const response = await plaidClient.transactionsGet({
         access_token: accessToken,
-        start_date: daysAgo.toISOString().split('T')[0],
+        start_date: firstDayOfMonth.toISOString().split('T')[0],
         end_date: today.toISOString().split('T')[0],
       });
   
@@ -67,7 +66,6 @@ import {
     } catch (error) {
       console.error("❌ Plaid transactions error:", error);
       
-      // Check for "PRODUCT_NOT_READY" error
       const plaidError = error as any;
       if (plaidError.response?.data?.error_code === "PRODUCT_NOT_READY") {
         throw new Error("PRODUCT_NOT_READY");
@@ -76,6 +74,7 @@ import {
       throw error;
     }
   }
+  
   
   export async function createSandboxToken() {
     try {

@@ -1,3 +1,8 @@
+export interface Charity {
+  name: string;
+  url: string;
+}
+
 export interface Transaction {
   date: string;
   name: string;
@@ -5,15 +10,10 @@ export interface Transaction {
   societalDebt?: number;
   unethicalPractices?: string[];
   ethicalPractices?: string[];
-  information?: string;
-  charities?: Record<string, Charity>;
-  practiceDebts?: Record<string, number>; // + or -
   practiceWeights?: Record<string, number>; // percentages
-}
-
-export interface Charity {
-  name: string;
-  url: string;
+  practiceDebts?: Record<string, number>; // + or -
+  charities?: Record<string, Charity>;
+  information?: Record<string, string>; // Information per practice
 }
 
 export interface AnalyzedTransactionData {

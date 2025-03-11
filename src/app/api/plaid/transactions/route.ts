@@ -14,7 +14,7 @@ export async function POST(req: Request) {
       if (error instanceof Error && error.message === "PRODUCT_NOT_READY") {
         return NextResponse.json(
           {
-            error: "Transactions are not ready yet. Please wait and try again.",
+            error: "Transactions are not ready yet. Thank you for your patience.",
             retryAfter: "1 hour",
           },
           { status: 503 } // Use HTTP 503 (Service Unavailable)
