@@ -6,7 +6,7 @@ import {
   CountryCode,
 } from "plaid";
 import { config } from "@/config";
-import { PlaidError } from "@/types/transactions";
+import { PlaidError } from "@/shared/types/transactions";
 
 // Initialize Plaid client
 const configuration = new Configuration({
@@ -100,11 +100,13 @@ export async function createSandboxToken() {
       body: JSON.stringify({
         client_id: config.plaid.clientId,
         secret: config.plaid.secret,
-        institution_id: "ins_109508",
+        institution_id: "ins_1",
         initial_products: ["transactions"],
       }),
     });
-
+// ins_109508
+// ins_128026 
+// ins_3
     const data = await response.json();
     
     if (!response.ok) {

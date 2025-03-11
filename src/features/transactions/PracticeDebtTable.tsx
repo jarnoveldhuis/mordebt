@@ -1,4 +1,4 @@
-import { Transaction, Charity } from "@/types/transactions";
+import { Transaction, Charity } from "@/shared/types/transactions";
 import React from "react";
 
 interface PracticeDebtTableProps {

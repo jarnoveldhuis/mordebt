@@ -1,4 +1,4 @@
-import { Transaction } from "@/types/transactions";
+import { Transaction } from "@/shared/types/transactions";
 import { TransactionListItem } from "./TransactionListItem";
 
 interface TransactionListProps {

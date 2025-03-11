@@ -21,11 +21,13 @@ export async function POST(_req: NextRequest) {
       body: JSON.stringify({
         client_id: process.env.PLAID_CLIENT_ID,
         secret: PLAID_SECRET, // ✅ Now using the correct secret!
-        institution_id: "ins_109509",
+        institution_id: "ins_3",
         initial_products: ["transactions"],
       }),
     });
-
+    // ins_3 chase
+    // ins_109509
+    
     const data = await response.json();
     console.log("🔍 Plaid API Response:", JSON.stringify(data, null, 2));
 

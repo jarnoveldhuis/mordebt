@@ -1,4 +1,4 @@
-import PlaidLink from "@/components/PlaidLink";
+import PlaidLink from "@/features/banking/PlaidLink";
 
 interface PlaidConnectionSectionProps {
   onSuccess: (public_token: string) => void;

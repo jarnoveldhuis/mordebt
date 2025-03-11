@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { Transaction } from "@/types/transactions";
+import { Transaction } from "@/shared/types/transactions";
 import { transactionAnalysisPrompt } from "./prompts";
 import { config } from "@/config";
 

@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useAuth } from "@/hooks/useAuth";
-import { Transaction } from '@/types/transactions';
-import { Header } from "@/components/dashboard/Header";
-import { PlaidConnectionSection } from "@/components/dashboard/PlaidConnectionSection";
-import { TransactionList } from "@/components/dashboard/TransactionList";
-import { PracticeDebtTable } from "@/components/dashboard/PracticeDebtTable";
-import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
-import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { useAuth } from "@/shared/hooks/useAuth";
+import { Transaction } from '@/shared/types/transactions';
+import { Header } from "@/shared/components/Header";
+import { PlaidConnectionSection } from "@/app/api/plaid/PlaidConnectionSection";
+import { TransactionList } from "@/features/transactions/TransactionList";
+import { PracticeDebtTable } from "@/features/transactions/PracticeDebtTable";
+import { LoadingSpinner } from "@/shared/components/ui/LoadingSpinner";
+import { ErrorAlert } from "@/shared/components/ui/ErrorAlert";
 import { config } from "@/config/index";
 
 export default function Dashboard() {
@@ -168,7 +168,7 @@ export default function Dashboard() {
         productNotReady = true;
         const errorData = await response.json();
         console.warn("🚧 Transactions not ready:", errorData.error);
-        setError("Transactions data is not ready yet. Please wait a moment and try again.");
+        setError("Transactions data is not ready yet. Thank you for your patience.");
         // Optionally schedule an auto-retry in 10 seconds:
         setTimeout(() => fetchTransactions(token), 10000);
         return;
