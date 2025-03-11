@@ -3,13 +3,19 @@
 import { useEffect, useState } from "react";
 import { config } from "@/config";
 
+interface PlaidErrorType {
+  error_code?: string;
+  error_message?: string;
+  display_message?: string;
+}
+
 declare global {
   interface Window {
     Plaid: {
       create: (config: {
         token: string;
         onSuccess: (public_token: string) => void;
-        onExit: (error?: any) => void;
+        onExit: (error?: PlaidErrorType) => void;
       }) => { open: () => void };
     };
   }
@@ -74,7 +80,7 @@ export default function PlaidLink({ onSuccess }: PlaidLinkProps) {
         console.log("✅ Plaid Success! public_token:", public_token);
         onSuccess(public_token);
       },
-      onExit: (error?: any) => {
+      onExit: (error?: PlaidErrorType) => {
         if (error) console.error("❌ Plaid Link Exit Error:", error);
       },
     });

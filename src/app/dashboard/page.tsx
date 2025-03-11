@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { Transaction } from '@/types/transactions';
 import { useAuth } from "@/hooks/useAuth";
+import { Transaction } from '@/types/transactions';
 import { Header } from "@/components/dashboard/Header";
 import { PlaidConnectionSection } from "@/components/dashboard/PlaidConnectionSection";
 import { TransactionList } from "@/components/dashboard/TransactionList";
@@ -13,17 +12,15 @@ import { ErrorAlert } from "@/components/ui/ErrorAlert";
 import { config } from "@/config/index";
 
 export default function Dashboard() {
-  const router = useRouter();
   const { user, loading: authLoading, logout } = useAuth();
 
   // State management
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [totalSocietalDebt, setTotalSocietalDebt] = useState<number | null>(null);
-  const [selectedCharity, setSelectedCharity] = useState<string | null>(null);
+  const [selectedCharity] = useState<string | null>(null);
   const [practiceDonations, setPracticeDonations] = useState<
     Record<string, { charity: { name: string; url: string } | null; amount: number }>
   >({});
-  const [debtPercentage, setDebtPercentage] = useState<number | null>(null);
   const [bankConnected, setBankConnected] = useState(false);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -123,7 +120,6 @@ export default function Dashboard() {
             );
           });
 
-          setDebtPercentage(data.debtPercentage);
           setTotalSocietalDebt(totalDebt);
           setPracticeDonations(newPracticeDonations);
           setAnalysisCompleted(true);
@@ -156,59 +152,7 @@ export default function Dashboard() {
     }
   }, [transactions, analysisCompleted, handleAnalyze]);
   
-  async function handlePlaidSuccess(public_token?: string) {
-    try {
-      setBankConnected(true);
-      setLoadingTransactions(true);
-      setError(null);
-
-      // In sandbox mode, auto-generate a token if not provided
-      if (!public_token && config.plaid.isSandbox) {
-        console.log("⚡ Bypassing Plaid UI in Sandbox...");
-        try {
-          const sandboxResponse = await fetch("/api/plaid/sandbox_token", {
-            method: "POST"
-          });
-          
-          if (!sandboxResponse.ok) {
-            throw new Error("Failed to generate sandbox token");
-          }
-          
-          const sandboxData = await sandboxResponse.json();
-          public_token = sandboxData.public_token;
-          console.log("✅ Generated Sandbox Public Token");
-        } catch (error) {
-          console.error("❌ Error generating sandbox token:", error);
-          throw new Error("Failed to generate sandbox token");
-        }
-      }
-
-      const response = await fetch("/api/plaid/exchange_token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ public_token }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to exchange Plaid token");
-      }
-
-      const data = await response.json();
-      if (data.access_token) {
-        console.log("✅ Received Plaid Access Token");
-        fetchTransactions(data.access_token);
-      } else {
-        throw new Error("No access token received from Plaid");
-      }
-    } catch (error) {
-      console.error("❌ Error in handlePlaidSuccess:", error);
-      setError(error instanceof Error ? error.message : "Failed to connect bank account");
-      setBankConnected(false);
-      setLoadingTransactions(false);
-    }
-  }
-
-  async function fetchTransactions(token: string) {
+  const fetchTransactions = useCallback(async (token: string) => {
     setLoadingTransactions(true);
     setError(null);
     let productNotReady = false;
@@ -266,7 +210,61 @@ export default function Dashboard() {
         setLoadingTransactions(false);
       }
     }
-  }
+  }, []);
+
+  const handlePlaidSuccess = useCallback(async (public_token?: string) => {
+    try {
+      setBankConnected(true);
+      setLoadingTransactions(true);
+      setError(null);
+
+      // In sandbox mode, auto-generate a token if not provided
+      if (!public_token && config.plaid.isSandbox) {
+        console.log("⚡ Bypassing Plaid UI in Sandbox...");
+        try {
+          const sandboxResponse = await fetch("/api/plaid/sandbox_token", {
+            method: "POST"
+          });
+          
+          if (!sandboxResponse.ok) {
+            throw new Error("Failed to generate sandbox token");
+          }
+          
+          const sandboxData = await sandboxResponse.json();
+          public_token = sandboxData.public_token;
+          console.log("✅ Generated Sandbox Public Token");
+        } catch (error) {
+          console.error("❌ Error generating sandbox token:", error);
+          throw new Error("Failed to generate sandbox token");
+        }
+      }
+
+      const response = await fetch("/api/plaid/exchange_token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ public_token }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to exchange Plaid token");
+      }
+
+      const data = await response.json();
+      if (data.access_token) {
+        console.log("✅ Received Plaid Access Token");
+        fetchTransactions(data.access_token);
+      } else {
+        throw new Error("No access token received from Plaid");
+      }
+    } catch (error) {
+      console.error("❌ Error in handlePlaidSuccess:", error);
+      setError(error instanceof Error ? error.message : "Failed to connect bank account");
+      setBankConnected(false);
+      setLoadingTransactions(false);
+    }
+  }, [fetchTransactions]);
+
+
 
   // Auto-connect in sandbox mode
   useEffect(() => {
@@ -274,7 +272,7 @@ export default function Dashboard() {
       console.log("🏦 Auto-connecting in sandbox mode...");
       handlePlaidSuccess(); // No token needed, will auto-generate one
     }
-  }, [user, bankConnected, loadingTransactions]);
+  }, [user, bankConnected, loadingTransactions, handlePlaidSuccess]);
 
   // Render loading state during authentication check
   if (authLoading) {

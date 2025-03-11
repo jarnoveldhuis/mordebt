@@ -42,7 +42,7 @@ Return only strict JSON, no extra disclaimers or markdown. The JSON must match e
     }
 },
 "information": {
-    "🏭 Factory Farming": "Animals suffer, environments degrade, and diseases spread"
+    "🏭 Factory Farming": "Factory farming causes environmental destruction, animal suffering, antibiotic resistance, and unethical food production."
 }
     }
 ],
