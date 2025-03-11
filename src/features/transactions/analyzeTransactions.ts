@@ -65,20 +65,20 @@ export async function analyzeTransactions(transactions: Transaction[]) {
     const practiceWeights = t.practiceWeights || {};
     const information = t.information || {};
 
-    // Unethical practices => always positive contributions
+    // Unethical practices => always positive contributions (creating debt)
     unethicalPractices.forEach((practice) => {
       const weight = practiceWeights[practice] ?? 100;
       const portion = t.amount * (weight / 100);
-      practiceDebts[practice] = portion;
+      practiceDebts[practice] = portion; // Positive value = debt
       newSocietalDebt += portion;
     });
 
-    // Ethical practices => always negative contributions
+    // Ethical practices => always negative contributions (reducing debt)
     ethicalPractices.forEach((practice) => {
       const weight = practiceWeights[practice] ?? 100;
-      const portion = t.amount * (weight / 100);
-      practiceDebts[practice] = -portion;
-      newSocietalDebt -= portion;
+      const portion = -1 * (t.amount * (weight / 100)); // Make it negative
+      practiceDebts[practice] = portion; // Negative value = credit
+      newSocietalDebt += portion; // Add the negative value
     });
 
     // If no practices, set debt to 0

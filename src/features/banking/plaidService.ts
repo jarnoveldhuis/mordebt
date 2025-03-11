@@ -100,13 +100,14 @@ export async function createSandboxToken() {
       body: JSON.stringify({
         client_id: config.plaid.clientId,
         secret: config.plaid.secret,
-        institution_id: "ins_1",
+        institution_id: "ins_128026",
         initial_products: ["transactions"],
       }),
     });
 // ins_109508
 // ins_128026 
 // ins_3
+// ins_1
     const data = await response.json();
     
     if (!response.ok) {

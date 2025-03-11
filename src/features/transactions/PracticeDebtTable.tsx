@@ -1,5 +1,7 @@
+// src/features/transactions/PracticeDebtTable.tsx
 import { Transaction, Charity } from "@/shared/types/transactions";
-import React from "react";
+import React, { useState } from "react";
+import { DonationModal } from "@/features/charity/DonationModal";
 
 interface PracticeDebtTableProps {
   practiceDonations: Record<string, { charity: Charity | null; amount: number }>;
@@ -14,6 +16,9 @@ export function PracticeDebtTable({
   totalSocietalDebt,
   selectedCharity,
 }: PracticeDebtTableProps) {
+  const [selectedPractice, setSelectedPractice] = useState<string | null>(null);
+  const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
+
   // Early return if no data
   if (totalSocietalDebt === null || Object.keys(practiceDonations).length === 0) {
     return null;
@@ -36,6 +41,18 @@ export function PracticeDebtTable({
     return "No details available";
   };
 
+  // Handle offset click for a specific practice
+  const handleOffsetPractice = (practice: string, amount: number) => {
+    setSelectedPractice(practice);
+    setIsDonationModalOpen(true);
+  };
+
+  // Handle offset all button
+  const handleOffsetAll = () => {
+    setSelectedPractice("All Societal Debt");
+    setIsDonationModalOpen(true);
+  };
+
   return (
     <div className="bg-gray-50 p-4 rounded-lg shadow-sm mt-4">
       <h2 className="text-lg font-semibold text-gray-800 mb-4">
@@ -47,9 +64,9 @@ export function PracticeDebtTable({
           <thead>
             <tr className="border-b border-gray-300">
               <th className="text-left text-gray-700 p-2">Practice</th>
-              <th className="text-left text-gray-700 p-2">Charity</th>
               <th className="text-left text-gray-700 p-2">Impact</th>
               <th className="text-right text-gray-700 p-2">Amount</th>
+              <th className="text-center text-gray-700 p-2">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -62,25 +79,21 @@ export function PracticeDebtTable({
                   <td className={`p-2 font-medium ${amountColorClass}`}>
                     {practice}
                   </td>
-                  <td className="p-2">
-                    {charity ? (
-                      <a 
-                        href={charity.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline font-medium"
-                      >
-                        {charity.name}
-                      </a>
-                    ) : (
-                      <span className="text-gray-500">—</span>
-                    )}
-                  </td>
                   <td className="p-2 text-gray-700 italic">
                     {practiceInfo || "No information available"}
                   </td>
                   <td className={`p-2 text-right font-bold ${amountColorClass}`}>
                     ${Math.abs(amount).toFixed(2)}
+                  </td>
+                  <td className="p-2 text-center">
+                    {amount > 0 && (
+                      <button
+                        onClick={() => handleOffsetPractice(practice, amount)}
+                        className="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-sm"
+                      >
+                        Offset
+                      </button>
+                    )}
                   </td>
                 </tr>
               );
@@ -88,24 +101,38 @@ export function PracticeDebtTable({
 
             {/* Total Debt Row */}
             <tr className="border-t-2 border-gray-300 font-bold">
-              <td colSpan={2} className="p-2">
-                <a 
-                  href={selectedCharity || "https://www.charitynavigator.org"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-bold shadow inline-block"
-                >
-                  💳 Offset Impact
-                </a>
+              <td colSpan={2} className="p-2 text-right text-gray-800 font-bold">
+                Total Impact:
               </td>
-              <td className="p-2 text-right text-black">Total Impact:</td>
               <td className={`p-2 text-right text-xl ${debtColorClass}`}>
                 ${Math.abs(totalSocietalDebt).toFixed(2)}
+              </td>
+              <td className="p-2 text-center">
+                {totalSocietalDebt > 0 && (
+                  <button
+                    onClick={handleOffsetAll}
+                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold shadow"
+                  >
+                    Offset All
+                  </button>
+                )}
               </td>
             </tr>
           </tbody>
         </table>
       </div>
+
+      {/* Donation Modal */}
+      {isDonationModalOpen && (
+        <DonationModal
+          practice={selectedPractice || "All Societal Debt"}
+          amount={selectedPractice && selectedPractice !== "All Societal Debt" 
+            ? practiceDonations[selectedPractice].amount 
+            : totalSocietalDebt!}
+          isOpen={isDonationModalOpen}
+          onClose={() => setIsDonationModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

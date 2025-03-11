@@ -21,7 +21,7 @@ export async function POST(_req: NextRequest) {
       body: JSON.stringify({
         client_id: process.env.PLAID_CLIENT_ID,
         secret: PLAID_SECRET, // ✅ Now using the correct secret!
-        institution_id: "ins_3",
+        institution_id: "ins_109509",
         initial_products: ["transactions"],
       }),
     });
