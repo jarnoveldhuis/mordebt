@@ -3,7 +3,7 @@
 import { config } from "@/config";
 
 // Helper function for logging
-function logDebug(message: string, data?: any) {
+function logDebug(message: string, data?: unknown) {
   if (process.env.NODE_ENV === 'development' || process.env.DEBUG_CHARITY === 'true') {
     console.log(`[Charity Service] ${message}`, data || '');
   }
@@ -69,6 +69,16 @@ export async function getCharityById(id: string): Promise<CharitySearchResult | 
 // Get recommended charities for a specific practice
 export async function getRecommendedCharities(practice: string): Promise<CharitySearchResult[]> {
   try {
+    const cleanPractice = practice
+      .replace(/[\u{1F300}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+      .trim();
+      
+    // For the "All Societal Debt" case, use "environment" as the search term
+    // For practice-specific cases, use the cleaned practice name
+    const searchTerm = cleanPractice === "All Societal Debt" ? "environment" : cleanPractice;
+    
+    logDebug(`Getting recommended charities for: ${searchTerm}`);
+    
     // Use our API route to get recommendations
     const response = await fetch(
       `/api/charity/recommend?practice=${encodeURIComponent(practice)}`

@@ -1,20 +1,18 @@
 // src/features/transactions/PracticeDebtTable.tsx
-import { Transaction, Charity } from "@/shared/types/transactions";
+import { Transaction } from "@/shared/types/transactions";
 import React, { useState } from "react";
 import { DonationModal } from "@/features/charity/DonationModal";
 
 interface PracticeDebtTableProps {
-  practiceDonations: Record<string, { charity: Charity | null; amount: number }>;
+  practiceDonations: Record<string, { charity: { name: string; url: string } | null; amount: number }>;
   transactions: Transaction[];
   totalSocietalDebt: number | null;
-  selectedCharity: string | null;
 }
 
 export function PracticeDebtTable({
   practiceDonations,
   transactions,
   totalSocietalDebt,
-  selectedCharity,
 }: PracticeDebtTableProps) {
   const [selectedPractice, setSelectedPractice] = useState<string | null>(null);
   const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
@@ -42,7 +40,7 @@ export function PracticeDebtTable({
   };
 
   // Handle offset click for a specific practice
-  const handleOffsetPractice = (practice: string, amount: number) => {
+  const handleOffsetPractice = (practice: string) => {
     setSelectedPractice(practice);
     setIsDonationModalOpen(true);
   };
@@ -70,7 +68,7 @@ export function PracticeDebtTable({
             </tr>
           </thead>
           <tbody>
-            {sortedPractices.map(([practice, { charity, amount }], i) => {
+            {sortedPractices.map(([practice, { amount }], i) => {
               const practiceInfo = findPracticeInfo(practice);
               const amountColorClass = amount >= 0 ? "text-red-600" : "text-green-600";
               
@@ -88,7 +86,7 @@ export function PracticeDebtTable({
                   <td className="p-2 text-center">
                     {amount > 0 && (
                       <button
-                        onClick={() => handleOffsetPractice(practice, amount)}
+                        onClick={() => handleOffsetPractice(practice)}
                         className="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-sm"
                       >
                         Offset

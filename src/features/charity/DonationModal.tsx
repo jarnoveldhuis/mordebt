@@ -6,14 +6,11 @@ import { CharitySearchResult, getRecommendedCharities } from "./charityService";
 import { createDonationUrl } from "./charityService";
 import { CharitySearch } from "./CharitySearch";
 import { LoadingSpinner } from "@/shared/components/ui/LoadingSpinner";
+import Image from "next/image";
 
 interface DonationModalProps {
   practice: string;
   amount: number;
-  charity?: {
-    name: string;
-    url: string;
-  } | null;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -21,7 +18,6 @@ interface DonationModalProps {
 export function DonationModal({
   practice,
   amount,
-  charity,
   isOpen,
   onClose,
 }: DonationModalProps) {
@@ -42,7 +38,7 @@ export function DonationModal({
     if (isOpen) {
       fetchRecommendedCharities();
     }
-  }, [isOpen, practice]);
+  }, [isOpen, practice]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Default charity for All Societal Debt
   useEffect(() => {
@@ -201,13 +197,17 @@ export function DonationModal({
                       onClick={() => setSelectedCharity(charity)}
                     >
                       <div className="flex items-center">
-                        {charity.logoUrl && (
-                          <img
-                            src={charity.logoUrl}
-                            alt={`${charity.name} logo`}
-                            className="w-10 h-10 object-contain mr-3"
-                          />
-                        )}
+                        {charity.logoUrl ? (
+                          <div className="relative w-10 h-10 mr-3">
+                            <Image
+                              src={charity.logoUrl}
+                              alt={`${charity.name} logo`}
+                              className="object-contain"
+                              fill
+                              sizes="40px"
+                            />
+                          </div>
+                        ) : null}
                         <div>
                           <h4 className="font-medium text-blue-700">{charity.name}</h4>
                           <p className="text-xs text-gray-700 truncate">{charity.mission}</p>

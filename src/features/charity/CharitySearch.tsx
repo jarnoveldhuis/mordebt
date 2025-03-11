@@ -4,6 +4,7 @@
 import { useState, useEffect } from "react";
 import { searchCharities, CharitySearchResult } from "./charityService";
 import { LoadingSpinner } from "@/shared/components/ui/LoadingSpinner";
+import Image from "next/image";
 
 interface CharitySearchProps {
   practice: string;
@@ -89,13 +90,17 @@ export function CharitySearch({ practice, onSelect }: CharitySearchProps) {
                 onClick={() => onSelect(charity)}
               >
                 <div className="flex items-center">
-                  {charity.logoUrl && (
-                    <img
-                      src={charity.logoUrl}
-                      alt={`${charity.name} logo`}
-                      className="w-12 h-12 object-contain mr-3"
-                    />
-                  )}
+                  {charity.logoUrl ? (
+                    <div className="relative w-12 h-12 mr-3">
+                      <Image
+                        src={charity.logoUrl}
+                        alt={`${charity.name} logo`}
+                        className="object-contain"
+                        fill
+                        sizes="48px"
+                      />
+                    </div>
+                  ) : null}
                   <div>
                     <h4 className="font-medium text-blue-600">{charity.name}</h4>
                     <p className="text-sm text-gray-600 truncate">{charity.mission}</p>

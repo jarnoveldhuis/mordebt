@@ -2,6 +2,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { config } from "@/config";
 
+interface EveryOrgNonprofit {
+  ein?: string;
+  id?: string;
+  name: string;
+  profileUrl?: string;
+  slug?: string;
+  description?: string;
+  tags?: string[];
+  logoUrl?: string;
+}
+
+interface EveryOrgResponse {
+  nonprofits?: EveryOrgNonprofit[];
+}
+
 export async function GET(request: NextRequest) {
   try {
     // Get search query from URL parameters
@@ -42,11 +57,11 @@ export async function GET(request: NextRequest) {
       
       try {
         // Parse JSON
-        const data = JSON.parse(responseText);
+        const data = JSON.parse(responseText) as EveryOrgResponse;
         
         // Transform the response to our desired format
-        const charities = data.nonprofits?.map((charity: any) => ({
-          id: charity.ein || charity.id,
+        const charities = data.nonprofits?.map((charity: EveryOrgNonprofit) => ({
+          id: charity.ein || charity.id || "",
           name: charity.name,
           url: charity.profileUrl || `https://www.every.org/${charity.slug}`,
           mission: charity.description || "No description available",

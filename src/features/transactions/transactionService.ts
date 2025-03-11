@@ -1,16 +1,8 @@
 // src/features/transactions/transactionService.ts
 
 import { db } from "@/shared/firebase/firebase";
-import { collection, addDoc, getDocs, query, where, orderBy, Timestamp, doc, setDoc, limit } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, where, orderBy, Timestamp, limit } from "firebase/firestore";
 import { Transaction, AnalyzedTransactionData } from "@/shared/types/transactions";
-
-// Interface for transaction data stored in Firestore
-interface FirestoreTransaction extends Omit<Transaction, 'date'> {
-  date: Timestamp;
-  userId: string;
-  createdAt: Timestamp;
-  accessToken?: string;
-}
 
 interface TransactionBatch {
   userId: string;
@@ -19,6 +11,7 @@ interface TransactionBatch {
   debtPercentage: number;
   createdAt: Timestamp;
   accessToken?: string;
+  id?: string;
 }
 
 // Save a batch of analyzed transactions
@@ -66,7 +59,7 @@ export async function getUserTransactionBatches(userId: string): Promise<Transac
       batches.push({
         ...data,
         id: doc.id
-      } as TransactionBatch & { id: string });
+      });
     });
     
     return batches;
@@ -98,7 +91,7 @@ export async function getLatestTransactionBatch(userId: string): Promise<Transac
     return {
       ...data,
       id: doc.id
-    } as TransactionBatch & { id: string };
+    };
   } catch (error) {
     console.error("Error getting latest transaction batch:", error);
     throw new Error("Failed to load latest transactions");
