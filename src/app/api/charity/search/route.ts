@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
       // Transform the response to our desired format
       const charities = data.nonprofits.map((charity: EveryOrgNonprofit) => {
         // Extract slug from profile URL if available
-        const slug = charity.slug || extractSlug(charity.profileUrl);
+        const slug = charity.slug || (charity.profileUrl ? extractSlug(charity.profileUrl) : null);
         
         return {
           id: charity.ein || charity.id || "",
