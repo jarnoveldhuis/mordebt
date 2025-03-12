@@ -1,47 +1,21 @@
-import { NextRequest, NextResponse } from "next/server";
+// src/app/api/plaid/sandbox_token/route.ts
+import { NextResponse } from "next/server";
+import { createSandboxToken } from "@/features/banking/plaidService";
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function POST(_req: NextRequest) {
+export async function POST() {
   try {
     console.log("🔍 Requesting Plaid Sandbox Token...");
 
-    // ✅ Select the correct secret based on the environment
-    const PLAID_SECRET =
-      process.env.PLAID_ENV === "sandbox"
-        ? process.env.PLAID_SECRET_SANDBOX
-        : process.env.PLAID_SECRET_PRODUCTION;
-
-    if (!PLAID_SECRET) {
-      throw new Error("❌ Plaid secret is missing! Check your environment variables.");
-    }
-
-    const response = await fetch("https://sandbox.plaid.com/sandbox/public_token/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        client_id: process.env.PLAID_CLIENT_ID,
-        secret: PLAID_SECRET, // ✅ Now using the correct secret!
-        institution_id: "ins_109509",
-        initial_products: ["transactions"],
-      }),
-    });
-    // ins_3 chase
-    // ins_109509
+    // Use the consolidated service function
+    const public_token = await createSandboxToken();
     
-    const data = await response.json();
-    console.log("🔍 Plaid API Response:", JSON.stringify(data, null, 2));
+    console.log("✅ Generated Sandbox Public Token:", public_token);
 
-    if (!response.ok) {
-      return NextResponse.json({ error: `Plaid Error: ${data.error_message || "Unknown error"}` }, { status: 500 });
-    }
-
-    if (!data.public_token) {
-      throw new Error("Plaid did not return a public_token");
-    }
-
-    return NextResponse.json({ public_token: data.public_token });
+    return NextResponse.json({ public_token });
   } catch (error) {
     console.error("❌ Error creating sandbox token:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ 
+      error: error instanceof Error ? error.message : "Internal server error" 
+    }, { status: 500 });
   }
 }

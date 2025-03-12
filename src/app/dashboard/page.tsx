@@ -17,7 +17,6 @@ export default function Dashboard() {
   // State management
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [totalSocietalDebt, setTotalSocietalDebt] = useState<number | null>(null);
-  const [selectedCharity] = useState<string | null>(null);
   const [practiceDonations, setPracticeDonations] = useState<
     Record<string, { charity: { name: string; url: string } | null; amount: number }>
   >({});
@@ -170,7 +169,6 @@ export default function Dashboard() {
         console.warn("🚧 Transactions not ready:", errorData.error);
         setError("Transactions data is not ready yet. Thank you for your patience.");
         // Optionally schedule an auto-retry in 10 seconds:
-        setTimeout(() => fetchTransactions(token), 10000);
         return;
       }
 
@@ -325,7 +323,6 @@ export default function Dashboard() {
             practiceDonations={practiceDonations}
             transactions={transactions}
             totalSocietalDebt={totalSocietalDebt}
-            selectedCharity={selectedCharity}
           />
         )}
       </div>

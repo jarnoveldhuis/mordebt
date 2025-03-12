@@ -2,11 +2,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { CharitySearchResult, getRecommendedCharities } from "./charityService";
-import { createDonationUrl } from "./charityService";
+import { 
+  CharitySearchResult, 
+  getRecommendedCharities, 
+  createDonationUrl, 
+  cleanPracticeName 
+} from "./charityService";
 import { CharitySearch } from "./CharitySearch";
+import { CharityImage } from "./CharityImage";
 import { LoadingSpinner } from "@/shared/components/ui/LoadingSpinner";
-import Image from "next/image";
 
 interface DonationModalProps {
   practice: string;
@@ -21,17 +25,18 @@ export function DonationModal({
   isOpen,
   onClose,
 }: DonationModalProps) {
-  // Handle "All Societal Debt" special case
-  const isAllSocietalDebt = practice === "All Societal Debt";
-  const displayPractice = isAllSocietalDebt ? "Total Impact" : practice;
-  
-  // Initially no selected charity - we'll always load from recommendations
+  // State management
   const [selectedCharity, setSelectedCharity] = useState<CharitySearchResult | null>(null);
-  
   const [donationAmount, setDonationAmount] = useState(Math.max(5, Math.round(amount)));
   const [showSearch, setShowSearch] = useState(false);
   const [recommendedCharities, setRecommendedCharities] = useState<CharitySearchResult[]>([]);
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Format practice name for display
+  const cleanedPractice = cleanPracticeName(practice);
+  const displayPractice = cleanedPractice === "All Societal Debt" ? "Total Impact" : practice;
+  const isAllSocietalDebt = cleanedPractice === "All Societal Debt";
 
   // Fetch recommended charities when modal opens
   useEffect(() => {
@@ -40,37 +45,34 @@ export function DonationModal({
     }
   }, [isOpen, practice]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Default charity for All Societal Debt
+  // Set a default charity when recommendations load
   useEffect(() => {
-    if (isAllSocietalDebt && recommendedCharities.length > 0 && !selectedCharity) {
-      // Select the first recommendation
+    if (recommendedCharities.length > 0 && !selectedCharity) {
       setSelectedCharity(recommendedCharities[0]);
     }
-  }, [isAllSocietalDebt, recommendedCharities, selectedCharity]);
+  }, [recommendedCharities, selectedCharity]);
 
-  // Fetch recommended charities for this practice
+  // Function to fetch recommended charities
   const fetchRecommendedCharities = async () => {
     setLoadingRecommendations(true);
+    setError(null);
+    
     try {
-      const cleanPractice = practice
-        .replace(/[\u{1F300}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
-        .trim();
-        
-      // For the "All Societal Debt" case, use "environment" as the search term
-      // For practice-specific cases, use the cleaned practice name
-      const searchTerm = isAllSocietalDebt ? "environment" : cleanPractice;
+      console.log(`Fetching charities for: ${practice}`);
+      const charities = await getRecommendedCharities(practice);
       
-      console.log(`Fetching charities for: ${searchTerm}`);
-      
-      const charities = await getRecommendedCharities(searchTerm);
-      setRecommendedCharities(charities);
-      
-      // If we got recommendations and don't have a selection yet, select the first one
-      if (charities.length > 0 && !selectedCharity) {
-        setSelectedCharity(charities[0]);
+      if (charities.length === 0) {
+        // If no specific recommendations, try a more generic search term
+        const fallbackTerm = isAllSocietalDebt ? "environment" : "charity";
+        console.log(`No results, trying fallback term: ${fallbackTerm}`);
+        const fallbackCharities = await getRecommendedCharities(fallbackTerm);
+        setRecommendedCharities(fallbackCharities);
+      } else {
+        setRecommendedCharities(charities);
       }
     } catch (error) {
       console.error("Error fetching recommended charities:", error);
+      setError("Unable to load charity recommendations. Please try searching manually.");
     } finally {
       setLoadingRecommendations(false);
     }
@@ -80,43 +82,28 @@ export function DonationModal({
   const handleDonate = () => {
     if (!selectedCharity) return;
     
-    // Check if we have a donationUrl or need to create one
-    let donationUrl;
-    
     try {
-      if (selectedCharity.donationUrl) {
-        // Add parameters to existing URL
-        const url = new URL(selectedCharity.donationUrl);
-        url.searchParams.set('amount', Math.max(1, Math.round(donationAmount)).toString());
-        url.searchParams.set('utm_source', 'mordebt-app');
-        url.searchParams.set('utm_medium', 'web');
-        if (practice) {
-          url.searchParams.set('designation', practice);
-        }
-        donationUrl = url.toString();
-      } else {
-        // Get the ID from the charity - use slug if available, otherwise ein
-        const charityIdentifier = selectedCharity.url?.split('/').pop() || selectedCharity.id;
-        
-        // Create new URL using the charity ID
-        donationUrl = createDonationUrl(
-          charityIdentifier, 
-          donationAmount, 
-          practice
-        );
-      }
+      // Get charity ID from the URL or the ID field
+      const charityId = selectedCharity.id || 
+                         selectedCharity.url?.split('/').pop() || 
+                         'everydotorg';
+      
+      // Create donation URL consistently using our helper
+      const donationUrl = createDonationUrl(
+        charityId, 
+        donationAmount, 
+        practice
+      );
+      
+      console.log("Opening donation URL:", donationUrl);
+      
+      // Open donation URL in a new tab
+      window.open(donationUrl, "_blank");
+      onClose();
     } catch (error) {
-      console.error("Error creating donation URL:", error);
-      // Fallback to a default URL
-      const cleanPractice = practice.replace(/[\u{1F300}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
-      donationUrl = `https://www.every.org/donate?amount=${donationAmount}&utm_source=mordebt-app&designation=${encodeURIComponent(cleanPractice || "Societal Impact")}`;
+      console.error("Error processing donation:", error);
+      setError("Something went wrong. Please try again.");
     }
-    
-    console.log("Opening donation URL:", donationUrl);
-    
-    // Open donation URL in a new tab
-    window.open(donationUrl, "_blank");
-    onClose();
   };
 
   if (!isOpen) return null;
@@ -137,6 +124,12 @@ export function DonationModal({
               ${Math.abs(amount).toFixed(2)}
             </p>
           </div>
+          
+          {error && (
+            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">
+              {error}
+            </div>
+          )}
           
           {selectedCharity && !showSearch ? (
             <div className="mb-6 p-4 border border-gray-200 rounded">
@@ -192,22 +185,18 @@ export function DonationModal({
                 <div className="space-y-3">
                   {recommendedCharities.map((charity) => (
                     <div
-                      key={charity.id}
+                      key={charity.id || charity.name}
                       className="border border-gray-200 rounded p-3 hover:bg-blue-50 cursor-pointer"
                       onClick={() => setSelectedCharity(charity)}
                     >
                       <div className="flex items-center">
-                        {charity.logoUrl ? (
-                          <div className="relative w-10 h-10 mr-3">
-                            <Image
-                              src={charity.logoUrl}
-                              alt={`${charity.name} logo`}
-                              className="object-contain"
-                              fill
-                              sizes="40px"
-                            />
-                          </div>
-                        ) : null}
+                        <CharityImage
+                          src={charity.logoUrl}
+                          alt={charity.name}
+                          className="mr-3"
+                          width={40}
+                          height={40}
+                        />
                         <div>
                           <h4 className="font-medium text-blue-700">{charity.name}</h4>
                           <p className="text-xs text-gray-700 truncate">{charity.mission}</p>

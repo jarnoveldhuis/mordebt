@@ -2,6 +2,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { config } from "@/config";
 
+interface CharityDetails {
+  id: string;
+  name: string;
+  url: string;
+  mission: string;
+  category: string;
+  logoUrl?: string;
+  donationUrl: string | null;
+}
+
+interface NonprofitResponse {
+  nonprofit?: {
+    ein?: string;
+    id?: string;
+    name: string;
+    profileUrl?: string;
+    slug?: string;
+    description?: string;
+    tags?: string[];
+    logoUrl?: string;
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
     // Get charity ID from URL parameters
@@ -30,12 +53,19 @@ export async function GET(request: NextRequest) {
       throw new Error(`API error: ${response.status}`);
     }
     
-    const data = await response.json();
+    const data = await response.json() as NonprofitResponse;
     const charity = data.nonprofit;
     
+    if (!charity) {
+      return NextResponse.json(
+        { error: "Charity data missing" },
+        { status: 404 }
+      );
+    }
+    
     // Transform the response to our desired format
-    const charityDetails = {
-      id: charity.ein || charity.id,
+    const charityDetails: CharityDetails = {
+      id: charity.ein || charity.id || "",
       name: charity.name,
       url: charity.profileUrl || `https://www.every.org/${charity.slug}`,
       mission: charity.description || "No description available",

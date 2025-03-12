@@ -1,3 +1,4 @@
+// src/shared/types/transactions.ts
 export interface Charity {
   name: string;
   url: string;
@@ -12,6 +13,7 @@ export interface Transaction {
   ethicalPractices?: string[];
   practiceWeights?: Record<string, number>; // percentages
   practiceDebts?: Record<string, number>; // + or -
+  practiceSearchTerms?: Record<string, string>; // search terms for charity lookup
   charities?: Record<string, Charity>;
   information?: Record<string, string>; // Information per practice
 }

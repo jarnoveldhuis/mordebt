@@ -23,7 +23,6 @@ export async function GET(request: NextRequest) {
   const practice = searchParams.get("practice");
 
   try {
-    
     if (!practice) {
       return NextResponse.json(
         { error: "Missing practice parameter" },
@@ -31,39 +30,31 @@ export async function GET(request: NextRequest) {
       );
     }
     
+    // Clean practice name - remove emojis and trim whitespace
+    const cleanPractice = practice
+      .replace(/[\u{1F300}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+      .trim();
+    
     // Map common practices to relevant search terms
     const searchTermMap: Record<string, string> = {
       // Unethical practices and their charity categories
-      "🏭 Factory Farming": "animal welfare",
       "Factory Farming": "animal welfare",
-      "📦 Excessive Packaging": "environment",
       "Excessive Packaging": "environment",
-      "👷 Labor Exploitation": "fair trade",
       "Labor Exploitation": "fair trade",
-      "🏭 High Emissions": "climate",
       "High Emissions": "climate",
-      "🌍 Environmental Degradation": "conservation",
       "Environmental Degradation": "conservation",
-      "🐇 Animal Testing": "animal rights",
       "Animal Testing": "animal rights",
-      "💧 Water Waste": "water conservation",
       "Water Waste": "water conservation",
-      "🌳 Resource Depletion": "sustainability",
       "Resource Depletion": "sustainability",
-      "🔒 Data Privacy Issues": "digital rights",
       "Data Privacy Issues": "digital rights",
-      "⚡ High Energy Usage": "renewable energy",
       "High Energy Usage": "renewable energy",
       
       // Special cases
       "All Societal Debt": "climate",
-      
-      // Default to the practice name if no mapping exists
-      "Default": practice.replace(/[\u{1F300}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim()
     };
     
     // Get the appropriate search term
-    let searchTerm = searchTermMap[practice] || searchTermMap["Default"];
+    let searchTerm = searchTermMap[cleanPractice] || cleanPractice;
     
     // If search term is empty after cleaning, use a generic term
     if (!searchTerm) {
@@ -74,42 +65,44 @@ export async function GET(request: NextRequest) {
     
     try {
       // Call the Every.org API
-      const response = await fetch(
-        `${config.charity.baseUrl}/search/${encodeURIComponent(searchTerm)}?apiKey=${config.charity.apiKey}&take=5`
-      );
+      const apiUrl = `${config.charity.baseUrl}/search/${encodeURIComponent(searchTerm)}?apiKey=${config.charity.apiKey}&take=5`;
+      console.log(`Calling Every.org API: ${apiUrl}`);
+      
+      const response = await fetch(apiUrl);
       
       if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
-      
-      // Try to get text first to log in case of parsing error
-      const responseText = await response.text();
-      
-      try {
-        // Parse JSON
-        const data = JSON.parse(responseText) as EveryOrgResponse;
-        
-        // Transform the response to our desired format
-        const charities = data.nonprofits?.map((charity: EveryOrgNonprofit) => ({
-          id: charity.ein || charity.id || "",
-          name: charity.name,
-          url: charity.profileUrl || `https://www.every.org/${charity.slug}`,
-          mission: charity.description || "No description available",
-          category: charity.tags?.[0] || "Charity",
-          logoUrl: charity.logoUrl,
-          donationUrl: charity.profileUrl ? `${charity.profileUrl}/donate` : null
-        })) || [];
-        
+        console.error(`API error: ${response.status}`);
+        // Fall back to empty results instead of throwing an error
         return NextResponse.json({ 
           practice,
           searchTerm,
-          charities 
+          charities: []
         });
-      } catch (parseError) {
-        console.error("Failed to parse API response:", parseError);
-        console.error("Response text:", responseText.substring(0, 200) + "...");
-        throw new Error("Invalid response from charity API");
       }
+      
+      // Check content type
+      const contentType = response.headers.get('content-type');
+      console.log(`Received content type: ${contentType}`);
+      
+      // Parse based on content type
+      const data: EveryOrgResponse = await response.json();
+      
+      // Transform the response to our desired format
+      const charities = data.nonprofits?.map((charity: EveryOrgNonprofit) => ({
+        id: charity.ein || charity.id || "",
+        name: charity.name,
+        url: charity.profileUrl || `https://www.every.org/${charity.slug}`,
+        mission: charity.description || "No description available",
+        category: charity.tags?.[0] || "Charity",
+        logoUrl: charity.logoUrl,
+        donationUrl: charity.profileUrl ? `${charity.profileUrl}/donate` : null
+      })) || [];
+      
+      return NextResponse.json({ 
+        practice,
+        searchTerm,
+        charities 
+      });
     } catch (apiError) {
       console.error("API request failed:", apiError);
       // Return empty results instead of error

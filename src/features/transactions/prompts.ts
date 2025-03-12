@@ -1,3 +1,4 @@
+// src/features/transactions/prompts.ts
 export const transactionAnalysisPrompt = `
 You are an AI that analyzes financial transactions to calculate societal debt - the ethical impact of consumer spending.
 
@@ -49,21 +50,27 @@ Rules:
      * Focus on infrastructure impact and energy usage
      * Never assign food or manufacturing-related practices
 
-4) For each practice, include:
-   - For all practices: A concise impact description (under 15 words)
-   - Use consistent emoji prefixes for similar practices
+5) For each practice, provide:
+   - A concise impact description (under 15 words)
+   - For every practice, include a "searchTerm" that's optimized for charity searches
+   - Use these exact search term mappings:
+     * Factory Farming → "animal welfare"
+     * High Emissions → "climate"
+     * Environmental Degradation → "conservation"
+     * Water Waste → "water conservation"
+     * Resource Depletion → "sustainability"
+     * Data Privacy Issues → "digital rights"
+     * Labor Exploitation → "workers rights"
+     * Excessive Packaging → "environment"
+     * Animal Testing → "animal rights"
 
-5) Output Guidelines:
+6) Output Guidelines:
    - Be consistent in practice naming across transactions
    - Format societal debt calculations based on the weighted sum of all practices
-   - For unknown merchant types or when uncertain, return empty arrays for practices:
-
-     "unethicalPractices": [],
-     "ethicalPractices": []
-
+   - For unknown merchant types or when uncertain, return empty arrays for practices
    - Quality is more important than quantity - it's better to correctly identify one practice than to assign multiple inaccurate ones
 
-Return only strict JSON with no additional text or markdown:
+Return ONLY strict JSON with no additional text or markdown:
 
 {
 "transactions": [
@@ -71,53 +78,36 @@ Return only strict JSON with no additional text or markdown:
     "date": "YYYY-MM-DD",
     "name": "McDonald's",
     "amount": 12.99,
-    "unethicalPractices": ["🏭 Factory Farming"],
+    "unethicalPractices": ["Factory Farming"],
     "ethicalPractices": [],
     "practiceWeights": {
-        "🏭 Factory Farming": 45
+        "Factory Farming": 45
+    },
+    "practiceSearchTerms": {
+        "Factory Farming": "animal welfare"
     },
     "information": {
-        "🏭 Factory Farming": "Relies on industrial meat production with environmental and animal welfare concerns."
+        "Factory Farming": "Relies on industrial meat production with environmental and animal welfare concerns."
     }
   },
   {
     "date": "YYYY-MM-DD",
     "name": "Google One",
     "amount": 9.99,
-    "unethicalPractices": ["🔒 Data Privacy Issues"],
-    "ethicalPractices": ["⚡ Clean Energy Usage"],
+    "unethicalPractices": ["Data Privacy Issues"],
+    "ethicalPractices": ["Clean Energy Usage"],
     "practiceWeights": {
-        "🔒 Data Privacy Issues": 25,
-        "⚡ Clean Energy Usage": 15
+        "Data Privacy Issues": 25,
+        "Clean Energy Usage": 15
+    },
+    "practiceSearchTerms": {
+        "Data Privacy Issues": "digital rights",
+        "Clean Energy Usage": "renewable energy"
     },
     "information": {
-        "🔒 Data Privacy Issues": "Collects and monetizes extensive user data with privacy implications.",
-        "⚡ Clean Energy Usage": "Uses renewable energy for data centers and operations."
+        "Data Privacy Issues": "Collects and monetizes extensive user data with privacy implications.",
+        "Clean Energy Usage": "Uses renewable energy for data centers and operations."
     }
-  },
-  {
-    "date": "YYYY-MM-DD",
-    "name": "MAX Streaming",
-    "amount": 15.99,
-    "unethicalPractices": ["🔌 High Energy Usage"],
-    "ethicalPractices": ["🎬 Content Diversity"],
-    "practiceWeights": {
-        "🔌 High Energy Usage": 15,
-        "🎬 Content Diversity": 20
-    },
-    "information": {
-        "🔌 High Energy Usage": "Streaming services require significant server infrastructure and bandwidth.",
-        "🎬 Content Diversity": "Provides platform for diverse voices and perspectives in media."
-    }
-  },
-  {
-    "date": "YYYY-MM-DD",
-    "name": "Unknown Merchant",
-    "amount": 25.00,
-    "unethicalPractices": [],
-    "ethicalPractices": [],
-    "practiceWeights": {},
-    "information": {}
   }
 ]
 }

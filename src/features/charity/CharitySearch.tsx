@@ -2,9 +2,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { searchCharities, CharitySearchResult } from "./charityService";
+import { searchCharities, CharitySearchResult, cleanPracticeName } from "./charityService";
+import { CharityImage } from "./CharityImage";
 import { LoadingSpinner } from "@/shared/components/ui/LoadingSpinner";
-import Image from "next/image";
 
 interface CharitySearchProps {
   practice: string;
@@ -19,16 +19,23 @@ export function CharitySearch({ practice, onSelect }: CharitySearchProps) {
 
   // Initialize search term based on practice
   useEffect(() => {
-    // Clean up practice name by removing emojis and extra spaces
-    const cleanedPractice = practice
-      .replace(/[\u{1F300}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, "")
-      .trim();
+    // Clean up practice name
+    const cleanedPractice = cleanPracticeName(practice);
     
     // Special cases
     if (cleanedPractice === "All Societal Debt") {
       setSearchTerm("environment"); // Default to environment for general offset
     } else {
-      setSearchTerm(cleanedPractice);
+      // Map some common terms to more effective search terms
+      const mappings: Record<string, string> = {
+        "Factory Farming": "animal welfare",
+        "High Emissions": "climate",
+        "Data Privacy Issues": "digital rights",
+        "Water Waste": "water conservation",
+        "Environmental Degradation": "conservation"
+      };
+      
+      setSearchTerm(mappings[cleanedPractice] || cleanedPractice);
     }
   }, [practice]);
 
@@ -85,28 +92,28 @@ export function CharitySearch({ practice, onSelect }: CharitySearchProps) {
           ) : (
             results.map((charity) => (
               <div
-                key={charity.id}
+                key={charity.id || charity.name} 
                 className="border border-gray-200 rounded p-3 hover:bg-blue-50 cursor-pointer"
                 onClick={() => onSelect(charity)}
               >
                 <div className="flex items-center">
-                  {charity.logoUrl ? (
-                    <div className="relative w-12 h-12 mr-3">
-                      <Image
-                        src={charity.logoUrl}
-                        alt={`${charity.name} logo`}
-                        className="object-contain"
-                        fill
-                        sizes="48px"
-                      />
-                    </div>
-                  ) : null}
+                  <CharityImage
+                    src={charity.logoUrl}
+                    alt={charity.name}
+                    className="mr-3"
+                    width={48}
+                    height={48}
+                  />
                   <div>
                     <h4 className="font-medium text-blue-600">{charity.name}</h4>
-                    <p className="text-sm text-gray-600 truncate">{charity.mission}</p>
-                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                      {charity.category}
-                    </span>
+                    <p className="text-sm text-gray-600 truncate">
+                      {charity.mission || "Support this organization's mission"}
+                    </p>
+                    {charity.category && (
+                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                        {charity.category}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

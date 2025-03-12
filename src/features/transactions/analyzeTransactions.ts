@@ -1,3 +1,4 @@
+// src/features/transactions/analyzeTransactions.ts
 import OpenAI from "openai";
 import { Transaction } from "@/shared/types/transactions";
 import { transactionAnalysisPrompt } from "./prompts";
@@ -54,7 +55,7 @@ export async function analyzeTransactions(transactions: Transaction[]) {
     throw new Error("No transactions in OpenAI response");
   }
 
-  // Process transactions with practice weights
+  // Process transactions with practice weights and search terms
   const updatedTransactions = analyzedData.transactions.map((t) => {
     const practiceDebts: Record<string, number> = {};
     let newSocietalDebt = 0;
@@ -63,7 +64,40 @@ export async function analyzeTransactions(transactions: Transaction[]) {
     const unethicalPractices = t.unethicalPractices || [];
     const ethicalPractices = t.ethicalPractices || [];
     const practiceWeights = t.practiceWeights || {};
+    const practiceSearchTerms = t.practiceSearchTerms || {};
     const information = t.information || {};
+
+    // Build search terms if not provided by the API
+    const builtSearchTerms: Record<string, string> = {};
+    
+    // Default search term mappings
+    const defaultMappings: Record<string, string> = {
+      "Factory Farming": "animal welfare",
+      "High Emissions": "climate",
+      "Environmental Degradation": "conservation",
+      "Water Waste": "water conservation",
+      "Resource Depletion": "sustainability",
+      "Data Privacy Issues": "digital rights",
+      "Labor Exploitation": "workers rights",
+      "Excessive Packaging": "environment",
+      "Animal Testing": "animal rights",
+      "High Energy Usage": "renewable energy",
+      "Content Diversity": "media diversity",
+      "Sustainable Materials": "sustainability",
+      "Ethical Investment": "ethical finance",
+    };
+
+    // Combine unethical and ethical practices for search term processing
+    [...unethicalPractices, ...ethicalPractices].forEach(practice => {
+      if (practiceSearchTerms[practice]) {
+        builtSearchTerms[practice] = practiceSearchTerms[practice];
+      } else if (defaultMappings[practice]) {
+        builtSearchTerms[practice] = defaultMappings[practice];
+      } else {
+        // Use the practice itself as a fallback
+        builtSearchTerms[practice] = practice.toLowerCase();
+      }
+    });
 
     // Unethical practices => always positive contributions (creating debt)
     unethicalPractices.forEach((practice) => {
@@ -93,6 +127,7 @@ export async function analyzeTransactions(transactions: Transaction[]) {
       unethicalPractices,
       ethicalPractices,
       practiceWeights,
+      practiceSearchTerms: builtSearchTerms,
       information
     };
   });

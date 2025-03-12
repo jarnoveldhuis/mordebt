@@ -7,6 +7,7 @@ interface PracticeDebtTableProps {
   practiceDonations: Record<string, { charity: { name: string; url: string } | null; amount: number }>;
   transactions: Transaction[];
   totalSocietalDebt: number | null;
+  selectedCharity?: string | null;
 }
 
 export function PracticeDebtTable({
@@ -37,6 +38,16 @@ export function PracticeDebtTable({
       }
     }
     return "No details available";
+  };
+
+  // Find search term for a practice if available
+  const getPracticeSearchTerm = (practice: string): string | undefined => {
+    for (const tx of transactions) {
+      if (tx.practiceSearchTerms && tx.practiceSearchTerms[practice]) {
+        return tx.practiceSearchTerms[practice];
+      }
+    }
+    return undefined;
   };
 
   // Handle offset click for a specific practice
@@ -71,11 +82,17 @@ export function PracticeDebtTable({
             {sortedPractices.map(([practice, { amount }], i) => {
               const practiceInfo = findPracticeInfo(practice);
               const amountColorClass = amount >= 0 ? "text-red-600" : "text-green-600";
+              const searchTerm = getPracticeSearchTerm(practice);
               
               return (
                 <tr key={i} className="border-b border-gray-200 hover:bg-gray-50">
                   <td className={`p-2 font-medium ${amountColorClass}`}>
                     {practice}
+                    {searchTerm && (
+                      <span className="text-xs ml-2 text-gray-500">
+                        #{searchTerm}
+                      </span>
+                    )}
                   </td>
                   <td className="p-2 text-gray-700 italic">
                     {practiceInfo || "No information available"}
