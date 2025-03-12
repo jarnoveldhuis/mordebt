@@ -87,7 +87,7 @@ export async function getTransactions(
 
   try {
     const today = new Date();
-    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const startDate = new Date(today.getFullYear(), today.getMonth(), -1);
 
     // Log the request attempt
     console.log(`🔄 Fetching Plaid transactions (attempt ${retryCount + 1}/${MAX_RETRIES + 1})...`);
@@ -95,7 +95,7 @@ export async function getTransactions(
     // FIXED SYNTAX: Removed the extra { character at the end of the line
     const response = await plaidClient.transactionsGet({
       access_token: accessToken,
-      start_date: firstDayOfMonth.toISOString().split('T')[0],
+      start_date: startDate.toISOString().split('T')[0],
       end_date: today.toISOString().split('T')[0]
     });
 

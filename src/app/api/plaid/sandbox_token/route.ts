@@ -1,21 +1,5 @@
 // src/app/api/plaid/sandbox_token/route.ts
-import { NextResponse } from "next/server";
-import { createSandboxToken } from "@/features/banking/plaidService";
 
-export async function POST() {
-  try {
-    console.log("🔍 Requesting Plaid Sandbox Token...");
+import { createSandboxTokenHandler } from '@/features/banking/api/createSandboxToken';
 
-    // Use the consolidated service function
-    const public_token = await createSandboxToken();
-    
-    console.log("✅ Generated Sandbox Public Token:", public_token);
-
-    return NextResponse.json({ public_token });
-  } catch (error) {
-    console.error("❌ Error creating sandbox token:", error);
-    return NextResponse.json({ 
-      error: error instanceof Error ? error.message : "Internal server error" 
-    }, { status: 500 });
-  }
-}
+export { createSandboxTokenHandler as POST };
