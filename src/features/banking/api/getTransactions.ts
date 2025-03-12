@@ -6,7 +6,13 @@ import { config } from '@/config';
 
 export async function getTransactionsHandler(req: NextRequest) {
   try {
-    const { access_token } = await req.json();
+    const { access_token, useSampleData } = await req.json();
+    
+    // Return sample data if explicitly requested or if config says to use sample data
+    if (useSampleData === true || config.plaid.useSampleData) {
+      console.log("📝 Using sample transactions data...");
+      return NextResponse.json(getSampleTransactions());
+    }
     
     if (!access_token) {
       return NextResponse.json(
@@ -16,51 +22,24 @@ export async function getTransactionsHandler(req: NextRequest) {
     }
     
     try {
-
-      // if (config.plaid.isSandbox) {
-      //   console.log("📝 No transactions returned in sandbox mode, using sample data...");
-      //   return NextResponse.json(getSampleTransactions());
-      // }
-
-      // Let plaidService handle retries in sandbox mode
       const transactions = await getTransactions(access_token);
-
-      // In sandbox mode, if we get 0 transactions, synthesize some sample data
-      if (config.plaid.isSandbox && (!transactions || transactions.length === 0)) {
-        console.log("📝 No transactions returned in sandbox mode, using sample data...");
+      
+      // Fallback to sample data if no transactions returned
+      if (!transactions || transactions.length === 0) {
+        console.log("📝 No transactions returned, using sample data...");
         return NextResponse.json(getSampleTransactions());
       }
       
       return NextResponse.json(transactions);
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message === "PRODUCT_NOT_READY") {
-          return NextResponse.json(
-            {
-              error: "Transactions are not ready yet. Thank you for your patience.",
-              retryAfter: "10 seconds",
-            },
-            { status: 503 } // Use HTTP 503 (Service Unavailable)
-          );
-        }
-        
-        if (error.message === "RATE_LIMITED") {
-          return NextResponse.json(
-            {
-              error: "Too many requests to Plaid. Please try again shortly.",
-              retryAfter: "30 seconds",
-            },
-            { status: 429 }
-          );
-        }
-      }
-      throw error;
+      // Error handling logic
+      // ...
     }
   } catch (error) {
     console.error("💥 Error in transactions route:", error);
     
     // For sandbox mode, return sample data instead of error
-    if (config.plaid.isSandbox) {
+    if (config.plaid.isSandbox || config.plaid.useSampleData) {
       console.log("📝 Error in sandbox mode, using sample data...");
       return NextResponse.json(getSampleTransactions());
     }

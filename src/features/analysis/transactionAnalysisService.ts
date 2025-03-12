@@ -1,6 +1,7 @@
-// src/features/transactions/analyzeTransactions.ts
+// src/features/transactions/transactionAnalysisService.ts
+// Domain logic for analyzing transactions - no HTTP concerns
 import OpenAI from "openai";
-import { Transaction } from "@/shared/types/transactions";
+import { Transaction, AnalyzedTransactionData } from "./types";
 import { transactionAnalysisPrompt } from "./prompts";
 import { config } from "@/config";
 
@@ -8,7 +9,11 @@ interface OpenAIResponse {
   transactions: Transaction[];
 }
 
-export async function analyzeTransactions(transactions: Transaction[]) {
+/**
+ * Core domain logic for analyzing transactions
+ * This function should have no awareness of HTTP requests/responses
+ */
+export async function analyzeTransactionsCore(transactions: Transaction[]): Promise<AnalyzedTransactionData> {
   if (!Array.isArray(transactions) || transactions.length === 0) {
     throw new Error("Invalid transactions data");
   }
@@ -55,8 +60,16 @@ export async function analyzeTransactions(transactions: Transaction[]) {
     throw new Error("No transactions in OpenAI response");
   }
 
+  return processAnalyzedTransactions(analyzedData.transactions);
+}
+
+/**
+ * Process the transactions returned from the AI
+ * Apply business rules for calculating societal debt
+ */
+export function processAnalyzedTransactions(aiTransactions: Transaction[]): AnalyzedTransactionData {
   // Process transactions with practice weights and search terms
-  const updatedTransactions = analyzedData.transactions.map((t) => {
+  const updatedTransactions = aiTransactions.map((t) => {
     const practiceDebts: Record<string, number> = {};
     let newSocietalDebt = 0;
 

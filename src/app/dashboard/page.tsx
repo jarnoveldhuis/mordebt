@@ -4,12 +4,14 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { Transaction } from '@/shared/types/transactions';
 import { Header } from "@/shared/components/Header";
-import { PlaidConnectionSection } from "@/app/api/plaid/PlaidConnectionSection";
-import { TransactionList } from "@/features/transactions/TransactionList";
-import { PracticeDebtTable } from "@/features/transactions/PracticeDebtTable";
+import { PlaidConnectionSection } from "@/app/api/banking/PlaidConnectionSection";
+import { TransactionList } from "@/features/analysis/TransactionList";
+import { PracticeDebtTable } from "@/features/analysis/PracticeDebtTable";
 import { LoadingSpinner } from "@/shared/components/ui/LoadingSpinner";
 import { ErrorAlert } from "@/shared/components/ui/ErrorAlert";
 import { config } from "@/config/index";
+
+
 
 export default function Dashboard() {
   const { user, loading: authLoading, logout } = useAuth();
@@ -69,7 +71,7 @@ export default function Dashboard() {
       console.log("Starting transaction analysis...");
 
       try {
-        const response = await fetch("/api/analyze", {
+        const response = await fetch("/api/analysis", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ transactions: transactionsToAnalyze }),
@@ -157,7 +159,7 @@ export default function Dashboard() {
     let productNotReady = false;
 
     try {
-      const response = await fetch("/api/plaid/transactions", {
+      const response = await fetch("/api/banking/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ access_token: token }),
@@ -210,57 +212,71 @@ export default function Dashboard() {
     }
   }, []);
 
-  const handlePlaidSuccess = useCallback(async (public_token?: string) => {
-    try {
-      setBankConnected(true);
-      setLoadingTransactions(true);
-      setError(null);
+  // src/app/dashboard/page.tsx
+const handlePlaidSuccess = useCallback(async (public_token?: string) => {
+  try {
+    setBankConnected(true);
+    setLoadingTransactions(true);
+    setError(null);
 
-      // In sandbox mode, auto-generate a token if not provided
-      if (!public_token && config.plaid.isSandbox) {
-        console.log("⚡ Bypassing Plaid UI in Sandbox...");
-        try {
-          const sandboxResponse = await fetch("/api/plaid/sandbox_token", {
-            method: "POST"
-          });
-          
-          if (!sandboxResponse.ok) {
-            throw new Error("Failed to generate sandbox token");
-          }
-          
-          const sandboxData = await sandboxResponse.json();
-          public_token = sandboxData.public_token;
-          console.log("✅ Generated Sandbox Public Token");
-        } catch (error) {
-          console.error("❌ Error generating sandbox token:", error);
-          throw new Error("Failed to generate sandbox token");
-        }
-      }
-
-      const response = await fetch("/api/plaid/exchange_token", {
+    // Check if we should use sample data
+    if (config.plaid.useSampleData || config.plaid.isSandbox) {
+      console.log("⚡ Using sample data instead of Plaid API...");
+      
+      // Directly call the transactions endpoint with a flag for sample data
+      const response = await fetch("/api/banking/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ public_token }),
+        body: JSON.stringify({ useSampleData: true }),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to exchange Plaid token");
+        throw new Error(`Server error: ${response.status}`);
       }
 
       const data = await response.json();
-      if (data.access_token) {
-        console.log("✅ Received Plaid Access Token");
-        fetchTransactions(data.access_token);
-      } else {
-        throw new Error("No access token received from Plaid");
-      }
-    } catch (error) {
-      console.error("❌ Error in handlePlaidSuccess:", error);
-      setError(error instanceof Error ? error.message : "Failed to connect bank account");
-      setBankConnected(false);
+      console.log(`Loaded ${data.length} sample transactions`);
+      
+      setTransactions(
+        data.map((t) => ({
+          ...t,
+          societalDebt: 0,
+          unethicalPractices: t.unethicalPractices || [],
+          ethicalPractices: t.ethicalPractices || [],
+          information: t.information || {}
+        }))
+      );
+      
+      setAnalysisCompleted(false);
       setLoadingTransactions(false);
+      return;
     }
-  }, [fetchTransactions]);
+
+    // Regular Plaid flow (only runs if not using sample data)
+    const response = await fetch("/api/banking/exchange_token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ public_token }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to exchange Plaid token");
+    }
+
+    const data = await response.json();
+    if (data.access_token) {
+      console.log("✅ Received Plaid Access Token");
+      fetchTransactions(data.access_token);
+    } else {
+      throw new Error("No access token received from Plaid");
+    }
+  } catch (error) {
+    console.error("❌ Error in handlePlaidSuccess:", error);
+    setError(error instanceof Error ? error.message : "Failed to connect bank account");
+    setBankConnected(false);
+    setLoadingTransactions(false);
+  }
+}, [fetchTransactions]);
 
 
 

@@ -37,7 +37,7 @@ export default function PlaidLink({ onSuccess }: PlaidLinkProps) {
           return; // No need to fetch link token in Sandbox
         }
 
-        const response = await fetch("/api/plaid/create_link_token", { method: "GET" });
+        const response = await fetch("/api/banking/create_link_token", { method: "GET" });
         const data = await response.json();
         console.log("Generated Plaid Link Token:", data.link_token);
         setLinkToken(data.link_token);
@@ -53,27 +53,21 @@ export default function PlaidLink({ onSuccess }: PlaidLinkProps) {
     if (config.plaid.isSandbox) {
       setLoading(true);
       try {
-        console.warn("⚡ Fetching sandbox token from API...");
-  
-        const response = await fetch("/api/plaid/sandbox_token", { method: "POST" });
-        const data = await response.json();
-  
-        if (!data.public_token) {
-          throw new Error("Sandbox API did not return a public_token");
-        }
-  
-        console.log("✅ Sandbox Public Token:", data.public_token);
-        onSuccess(data.public_token);
+        // In sandbox mode, just call onSuccess directly with a dummy token
+        // or skip token entirely by passing null
+        console.warn("⚡ Using sample data in sandbox mode...");
+        onSuccess(null); // Pass null to indicate sandbox mock mode
       } catch (error) {
-        console.error("❌ Error generating sandbox token:", error);
+        console.error("❌ Error in sandbox mode:", error);
       } finally {
         setLoading(false);
       }
       return;
     }
   
+    // Regular Plaid Link flow for non-sandbox
     if (!linkToken) return;
-  
+    
     const handler = window.Plaid.create({
       token: linkToken,
       onSuccess: (public_token: string) => {

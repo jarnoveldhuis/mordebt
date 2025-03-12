@@ -1,10 +1,11 @@
-// src/features/transactions/transactionService.ts
+// src/features/transactions/transactionStorageService.ts
+// Domain logic for storing and retrieving transactions - no HTTP concerns
 
 import { db } from "@/shared/firebase/firebase";
-import { collection, addDoc, getDocs, query, where, orderBy, Timestamp, limit } from "firebase/firestore";
-import { Transaction, AnalyzedTransactionData } from "@/shared/types/transactions";
+import { collection, addDoc, getDocs, query, where, orderBy, Timestamp, limit, DocumentData } from "firebase/firestore";
+import { Transaction, AnalyzedTransactionData } from "./types";
 
-interface TransactionBatch {
+export interface TransactionBatch {
   userId: string;
   transactions: Transaction[];
   totalSocietalDebt: number;
@@ -14,12 +15,18 @@ interface TransactionBatch {
   id?: string;
 }
 
-// Save a batch of analyzed transactions
+/**
+ * Save a batch of analyzed transactions to Firestore
+ */
 export async function saveAnalyzedTransactions(
   userId: string, 
   data: AnalyzedTransactionData,
   accessToken?: string
 ): Promise<string> {
+  if (!userId) {
+    throw new Error("User ID is required");
+  }
+
   try {
     // Create a batch document
     const batch: TransactionBatch = {
@@ -38,12 +45,18 @@ export async function saveAnalyzedTransactions(
     return docRef.id;
   } catch (error) {
     console.error("Error saving transactions:", error);
-    throw new Error("Failed to save transactions");
+    throw new Error("Failed to save transactions to database");
   }
 }
 
-// Get all transaction batches for a user
+/**
+ * Get all transaction batches for a user
+ */
 export async function getUserTransactionBatches(userId: string): Promise<TransactionBatch[]> {
+  if (!userId) {
+    throw new Error("User ID is required");
+  }
+
   try {
     const q = query(
       collection(db, "transactionBatches"), 
@@ -55,9 +68,9 @@ export async function getUserTransactionBatches(userId: string): Promise<Transac
     const batches: TransactionBatch[] = [];
     
     querySnapshot.forEach((doc) => {
-      const data = doc.data() as TransactionBatch;
+      const data = doc.data() as DocumentData;
       batches.push({
-        ...data,
+        ...data as TransactionBatch,
         id: doc.id
       });
     });
@@ -69,8 +82,14 @@ export async function getUserTransactionBatches(userId: string): Promise<Transac
   }
 }
 
-// Get the most recent transaction batch for a user
+/**
+ * Get the most recent transaction batch for a user
+ */
 export async function getLatestTransactionBatch(userId: string): Promise<TransactionBatch | null> {
+  if (!userId) {
+    throw new Error("User ID is required");
+  }
+
   try {
     const q = query(
       collection(db, "transactionBatches"), 
@@ -86,10 +105,10 @@ export async function getLatestTransactionBatch(userId: string): Promise<Transac
     }
     
     const doc = querySnapshot.docs[0];
-    const data = doc.data() as TransactionBatch;
+    const data = doc.data() as DocumentData;
     
     return {
-      ...data,
+      ...data as TransactionBatch,
       id: doc.id
     };
   } catch (error) {

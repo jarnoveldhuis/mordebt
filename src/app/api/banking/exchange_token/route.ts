@@ -1,4 +1,4 @@
-// src/app/api/plaid/exchange_token/route.ts
+// src/app/api/banking/exchange_token/route.ts
 
 import { exchangeTokenHandler } from '@/features/banking/api/exchangeToken';
 
