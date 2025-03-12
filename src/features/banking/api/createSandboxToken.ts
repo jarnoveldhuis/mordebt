@@ -1,9 +1,9 @@
 // src/features/banking/api/createSandboxToken.ts
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { createSandboxToken } from "@/features/banking/plaidService";
 
-export async function createSandboxTokenHandler(req: NextRequest) {
+export async function createSandboxTokenHandler() {
   try {
     console.log("🔍 Requesting Plaid Sandbox Token...");
 

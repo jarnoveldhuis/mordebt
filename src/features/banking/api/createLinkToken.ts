@@ -1,9 +1,9 @@
 // src/features/banking/api/createLinkToken.ts
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { createLinkToken } from "@/features/banking/plaidService";
 
-export async function createLinkTokenHandler(req: NextRequest) {
+export async function createLinkTokenHandler() {
   try {
     console.log("🚀 Requesting Plaid Link Token...");
     

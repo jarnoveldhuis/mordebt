@@ -17,19 +17,19 @@ export async function getTransactionsHandler(req: NextRequest) {
     
     try {
 
-      if (config.plaid.isSandbox) {
-        console.log("📝 No transactions returned in sandbox mode, using sample data...");
-        return NextResponse.json(getSampleTransactions());
-      }
+      // if (config.plaid.isSandbox) {
+      //   console.log("📝 No transactions returned in sandbox mode, using sample data...");
+      //   return NextResponse.json(getSampleTransactions());
+      // }
 
       // Let plaidService handle retries in sandbox mode
       const transactions = await getTransactions(access_token);
 
       // In sandbox mode, if we get 0 transactions, synthesize some sample data
-      // if (config.plaid.isSandbox && (!transactions || transactions.length === 0)) {
-      //   console.log("📝 No transactions returned in sandbox mode, using sample data...");
-      //   return NextResponse.json(getSampleTransactions());
-      // }
+      if (config.plaid.isSandbox && (!transactions || transactions.length === 0)) {
+        console.log("📝 No transactions returned in sandbox mode, using sample data...");
+        return NextResponse.json(getSampleTransactions());
+      }
       
       return NextResponse.json(transactions);
     } catch (error) {

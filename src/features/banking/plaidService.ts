@@ -92,7 +92,6 @@ export async function getTransactions(
     // Log the request attempt
     console.log(`🔄 Fetching Plaid transactions (attempt ${retryCount + 1}/${MAX_RETRIES + 1})...`);
 
-    // FIXED SYNTAX: Removed the extra { character at the end of the line
     const response = await plaidClient.transactionsGet({
       access_token: accessToken,
       start_date: startDate.toISOString().split('T')[0],
