@@ -32,8 +32,7 @@ export async function getTransactionsHandler(req: NextRequest) {
       
       return NextResponse.json(transactions);
     } catch (error) {
-      // Error handling logic
-      // ...
+      console.error("💥 Error fetching transactions:", error);
     }
   } catch (error) {
     console.error("💥 Error in transactions route:", error);

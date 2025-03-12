@@ -184,7 +184,7 @@ export default function Dashboard() {
         
         // Set the transactions but DO NOT trigger analysis here
         setTransactions(
-          data.map((t) => ({
+          data.map((t: Transaction) => ({
             ...t,
             societalDebt: 0,
             unethicalPractices: t.unethicalPractices || [],
