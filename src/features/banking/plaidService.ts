@@ -82,8 +82,8 @@ export async function getTransactions(
   accessToken: string, 
   retryCount = 0
 ): Promise<TransactionsGetResponse['transactions']> {
-  const MAX_RETRIES = 1; // Reduced to avoid conflict with UI retries
-  const RETRY_DELAY_MS = 2000 * Math.pow(2, retryCount); // Exponential backoff
+  const MAX_RETRIES = 15; // Reduced to avoid conflict with UI retries
+  const RETRY_DELAY_MS = 10000 * Math.pow(2, retryCount); // Exponential backoff
 
   try {
     const today = new Date();
@@ -110,7 +110,7 @@ export async function getTransactions(
     
     // For sandbox: automatically retry a few times with exponential backoff
     if (config.plaid.isSandbox && retryCount < MAX_RETRIES) {
-      console.log(`⏱️ Sandbox mode: retrying in ${RETRY_DELAY_MS/1000} seconds...`);
+      console.log(`⏱️ Sandbox mode: retrying in ${RETRY_DELAY_MS/10000} seconds...`);
       await delay(RETRY_DELAY_MS);
       return getTransactions(accessToken, retryCount + 1);
     }

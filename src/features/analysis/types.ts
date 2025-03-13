@@ -17,6 +17,7 @@ export interface Transaction {
   practiceCategories?: Record<string, string>; // categories for practices like "Climate Change", "Poverty", etc.
   charities?: Record<string, Charity>;
   information?: Record<string, string>; // Information per practice
+  analyzed?: boolean;
 }
 
 export interface AnalyzedTransactionData {

@@ -24,9 +24,8 @@ export async function getTransactionsHandler(req: NextRequest) {
     try {
       const transactions = await getTransactions(access_token);
       
-      // Fallback to sample data if no transactions returned
-      if (!transactions || transactions.length === 0) {
-        console.log("📝 No transactions returned, using sample data...");
+      if (config.plaid.useSampleData) {
+        console.log("📝 Error in sandbox mode, using sample data...");
         return NextResponse.json(getSampleTransactions());
       }
       

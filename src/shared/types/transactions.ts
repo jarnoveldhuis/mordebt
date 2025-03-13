@@ -5,6 +5,7 @@ export interface Charity {
 }
 
 export interface Transaction {
+  analyzed?: boolean;
   date: string;
   name: string;
   amount: number;

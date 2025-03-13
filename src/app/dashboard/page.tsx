@@ -60,7 +60,23 @@ export default function Dashboard() {
         savedTransactions.length > 0 && 
         !hasLoadedFromStorage.current) {
       console.log("Loading saved transactions from Firebase");
-      setTransactions(savedTransactions);
+      
+      // Mark all saved transactions as analyzed
+      // Mark all saved transactions as analyzed explicitly
+      // Since they came from Firebase, they're already analyzed
+      const analyzedTransactions = savedTransactions.map(tx => {
+        // Don't modify if it already has the analyzed flag
+        if (tx.analyzed !== undefined) {
+          return tx;
+        }
+        
+        return {
+          ...tx,
+          analyzed: true
+        };
+      });
+      
+      setTransactions(analyzedTransactions);
       setTotalSocietalDebt(savedDebt);
       setAnalysisCompleted(true);
       setBankConnected(true); // Mark as connected since we have data
@@ -70,18 +86,18 @@ export default function Dashboard() {
 
   // Core functionality - perform transaction analysis
   const handleAnalyze = useCallback(
-    async (transactionsToAnalyze: Transaction[] = transactions, skipChecks = false) => {
+    async (transactionsToAnalyze: Transaction[] = transactions) => {
       // Log what we're working with
       console.log(`Checking ${transactionsToAnalyze.length} transactions for analysis`);
 
       // Check if we're already analyzing or if analysis has been completed
-      if (!skipChecks && (analyzing || isAnalyzing.current)) {
+      if (analyzing || isAnalyzing.current) {
         console.log("Analysis already in progress, skipping...");
         return;
       }
 
       // Skip analysis if we already have saved data and analysis is completed
-      if (!skipChecks && analysisCompleted && savedTransactions && savedTransactions.length > 0) {
+      if (analysisCompleted && savedTransactions && savedTransactions.length > 0) {
         console.log("Analysis already completed with saved data, skipping...");
         return;
       }
@@ -98,18 +114,22 @@ export default function Dashboard() {
       setError(null);
 
       try {
-        // Filter to find only unanalyzed transactions
-        const unanalyzedTransactions = transactionsToAnalyze.filter((tx) => {
-          // Consider a transaction unanalyzed only if it has no societalDebt AND no practices
-          const hasNoSocietalDebt = tx.societalDebt === undefined || tx.societalDebt === 0;
-          const hasNoPractices =
-            (!tx.unethicalPractices || tx.unethicalPractices.length === 0) &&
-            (!tx.ethicalPractices || tx.ethicalPractices.length === 0);
-
-          // Both conditions must be true to consider it unanalyzed
-          return hasNoSocietalDebt && hasNoPractices;
+        // Filter for unanalyzed transactions - use explicit check to handle both undefined and false
+        const unanalyzedTransactions = transactionsToAnalyze.filter(tx => {
+          // If it has the new analyzed flag, use that
+          if (tx.analyzed === true) {
+            return false; // Skip already analyzed transactions
+          }
+          
+          // Otherwise, fall back to inferring from existing properties
+          const hasDebt = tx.societalDebt !== undefined && tx.societalDebt !== 0;
+          const hasPractices = 
+            (tx.unethicalPractices && tx.unethicalPractices.length > 0) || 
+            (tx.ethicalPractices && tx.ethicalPractices.length > 0);
+            
+          return !(hasDebt || hasPractices); // If it has no debt or practices, it needs analysis
         });
-
+        
         console.log(
           `Found ${unanalyzedTransactions.length} unanalyzed transactions out of ${transactionsToAnalyze.length} total`
         );
@@ -126,6 +146,9 @@ export default function Dashboard() {
 
           setTotalSocietalDebt(newTotalDebt);
           setAnalysisCompleted(true);
+          setAnalyzing(false);
+          isAnalyzing.current = false;
+          isAnalyzingManually.current = false;
           return;
         }
 
@@ -144,7 +167,7 @@ export default function Dashboard() {
 
         const data = await response.json();
         if (data.transactions) {
-          // Replace the unanalyzed transactions with their analyzed versions
+          // Create a map of analyzed transactions keyed by transaction identifier
           const analyzedTransactionMap = new Map(
             data.transactions.map((tx: Transaction) => [getTransactionIdentifier(tx), tx])
           );
@@ -159,10 +182,10 @@ export default function Dashboard() {
                 analyzed: true
               };
             }
-            // This is an already analyzed transaction
+            // This is an already analyzed transaction or one we didn't need to analyze
             return {
               ...tx,
-              analyzed: true
+              analyzed: tx.analyzed || false
             };
           });
 
@@ -211,13 +234,19 @@ export default function Dashboard() {
       !isAnalyzing.current &&
       !isAnalyzingManually.current
     ) {
-      // Check if all transactions are already analyzed
-      const anyUnanalyzedTransactions = transactions.some((tx) => {
-        const hasNoSocietalDebt = tx.societalDebt === undefined || tx.societalDebt === 0;
-        const hasNoPractices =
-          (!tx.unethicalPractices || tx.unethicalPractices.length === 0) &&
-          (!tx.ethicalPractices || tx.ethicalPractices.length === 0);
-        return hasNoSocietalDebt && hasNoPractices;
+      // Check if any transactions need analysis (using same logic as handleAnalyze)
+      const anyUnanalyzedTransactions = transactions.some(tx => {
+        if (tx.analyzed === true) {
+          return false; // Skip already analyzed transactions  
+        }
+        
+        // Otherwise infer from existing data
+        const hasDebt = tx.societalDebt !== undefined && tx.societalDebt !== 0;
+        const hasPractices = 
+          (tx.unethicalPractices && tx.unethicalPractices.length > 0) || 
+          (tx.ethicalPractices && tx.ethicalPractices.length > 0);
+          
+        return !(hasDebt || hasPractices);
       });
 
       if (!anyUnanalyzedTransactions) {
@@ -234,8 +263,8 @@ export default function Dashboard() {
       }
 
       console.log("Auto-triggering analysis from useEffect...");
-      isAnalyzingManually.current = true; // Prevent the fetchTransactions from triggering again
-      handleAnalyze(transactions, true); // Pass true to skip the checks
+      isAnalyzingManually.current = true; // Prevent duplicate analysis
+      handleAnalyze(transactions); // Don't skip checks
     }
   }, [transactions, analysisCompleted, handleAnalyze]);
 
@@ -276,51 +305,62 @@ export default function Dashboard() {
         if (Array.isArray(data) && data.length > 0) {
           console.log(`Loaded ${data.length} transactions from Plaid`);
 
-          // When setting transactions after fetching:
           if (savedTransactions && savedTransactions.length > 0) {
-            // Extract transaction IDs or unique identifiers to compare
-            const existingTransactionIds = new Set(
-              savedTransactions.map((tx) => getTransactionIdentifier(tx))
+            // Create an efficient lookup map for existing transactions
+            const existingTransactionMap = new Map(
+              savedTransactions.map(tx => [getTransactionIdentifier(tx), tx])
             );
 
-            // Find only new transactions
-            const newTransactions = data.filter(
-              (tx) => !existingTransactionIds.has(getTransactionIdentifier(tx))
-            );
+            // Process new transactions
+            const processedTransactions = data.map(tx => {
+              const identifier = getTransactionIdentifier(tx);
+              // Check if we already have this transaction
+              if (existingTransactionMap.has(identifier)) {
+                // Use the saved version (already analyzed)
+                return existingTransactionMap.get(identifier) as Transaction;
+              } else {
+                // This is a new transaction that needs analysis
+                return {
+                  ...tx,
+                  societalDebt: 0,
+                  unethicalPractices: [],
+                  ethicalPractices: [],
+                  information: {},
+                  analyzed: false
+                };
+              }
+            });
 
-            if (newTransactions.length === 0) {
-              console.log("No new transactions to analyze, using existing data");
-              // Use existing analyzed transactions
-              setTransactions(savedTransactions);
-              setTotalSocietalDebt(savedDebt || 0);
-              setAnalysisCompleted(true);
-              setLoadingTransactions(false);
-              return;
+            // Set the state with the combined transactions
+            setTransactions(processedTransactions);
+            
+            // Check if all transactions are analyzed using the same inference logic
+            const allAnalyzed = processedTransactions.every(tx => {
+              if (tx.analyzed === true) {
+                return true; // Explicitly analyzed
+              }
+              
+              // Otherwise infer from existing data
+              const hasDebt = tx.societalDebt !== undefined && tx.societalDebt !== 0;
+              const hasPractices = 
+                (tx.unethicalPractices && tx.unethicalPractices.length > 0) || 
+                (tx.ethicalPractices && tx.ethicalPractices.length > 0);
+                
+              return hasDebt || hasPractices; // Has data = considered analyzed
+            });
+            setAnalysisCompleted(allAnalyzed);
+            
+            if (allAnalyzed) {
+              // Calculate total debt for already analyzed transactions
+              const totalDebt = processedTransactions.reduce(
+                (sum, tx) => sum + (tx.societalDebt || 0),
+                0
+              );
+              setTotalSocietalDebt(totalDebt);
             }
 
-            console.log(`Found ${newTransactions.length} new transactions to analyze`);
-
-            // Initialize new transactions with default values
-            const newTransactionsWithDefaults = newTransactions.map((tx) => ({
-              ...tx,
-              societalDebt: 0,
-              unethicalPractices: [],
-              ethicalPractices: [],
-              information: {},
-              analyzed: false
-            }));
-
-            // Combine with existing analyzed transactions
-            const combinedTransactions = [
-              ...savedTransactions,
-              ...newTransactionsWithDefaults,
-            ];
-
-            // Only analyze the new transactions
-            setTransactions(combinedTransactions);
-            setAnalysisCompleted(false); // Trigger analysis only for new transactions
           } else {
-            // No existing transactions, analyze everything
+            // No existing transactions, mark all as needing analysis
             setTransactions(
               data.map((tx: Transaction) => ({
                 ...tx,
@@ -348,132 +388,84 @@ export default function Dashboard() {
         setLoadingTransactions(false);
       }
     },
-    [savedTransactions, savedDebt]
+    [savedTransactions]
   );
 
   // Handle Plaid success
-  const handlePlaidSuccess = useCallback(
-    async (public_token?: string | null) => {
-      try {
-        setBankConnected(true);
-        setLoadingTransactions(true);
-        setError(null);
+const handlePlaidSuccess = useCallback(async (public_token?: string) => {
+  try {
+    setBankConnected(true);
+    setLoadingTransactions(true);
+    setError(null);
 
-        // Check if we should use sample data
-        if (config.plaid.useSampleData || config.plaid.isSandbox) {
-          console.log("⚡ Using sample data instead of Plaid API...");
+    // Check if we should use sample data
+    if (config.plaid.useSampleData) {
+      console.log("⚡ Using sample data instead of Plaid API...");
+      
+      // Fix the API path here
+      const response = await fetch("/api/banking/transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ useSampleData: true }),
+      });
 
-          // Directly call the transactions endpoint with a flag for sample data
-          const response = await fetch("/api/banking/transactions", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ useSampleData: true }),
-          });
-
-          if (!response.ok) {
-            throw new Error(`Server error: ${response.status}`);
-          }
-
-          const data = await response.json();
-          console.log(`Loaded ${data.length} sample transactions`);
-
-          // Check if we already have analyzed transactions
-          if (savedTransactions && savedTransactions.length > 0) {
-            // Use the same transaction matching logic as in fetchTransactions
-            const existingTransactionIds = new Set(
-              savedTransactions.map((tx) => getTransactionIdentifier(tx))
-            );
-
-            const newTransactions = data.filter(
-              (tx) => !existingTransactionIds.has(getTransactionIdentifier(tx))
-            );
-
-            if (newTransactions.length === 0) {
-              // No new transactions, use existing analyzed data
-              setTransactions(savedTransactions);
-              setTotalSocietalDebt(savedDebt || 0);
-              setAnalysisCompleted(true);
-              setLoadingTransactions(false);
-              return;
-            }
-
-            // Process new transactions (similar to above)
-            const newTransactionsWithDefaults = newTransactions.map((tx) => ({
-              ...tx,
-              societalDebt: 0,
-              unethicalPractices: [],
-              ethicalPractices: [],
-              information: {},
-              analyzed: false
-            }));
-
-            setTransactions([
-              ...savedTransactions,
-              ...newTransactionsWithDefaults,
-            ]);
-          } else {
-            // No saved transactions, analyze all
-            setTransactions(
-              data.map((tx: Record<string, unknown>) => ({
-                ...tx,
-                societalDebt: 0,
-                unethicalPractices: [],
-                ethicalPractices: [],
-                information: {},
-                analyzed: false
-              }))
-            );
-          }
-
-          setAnalysisCompleted(false);
-          setLoadingTransactions(false);
-          return;
-        }
-
-        // Regular Plaid flow (only runs if not using sample data)
-        const response = await fetch("/api/banking/exchange_token", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ public_token }),
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to exchange Plaid token");
-        }
-
-        const data = await response.json();
-        if (data.access_token) {
-          console.log("✅ Received Plaid Access Token");
-          fetchTransactions(data.access_token);
-        } else {
-          throw new Error("No access token received from Plaid");
-        }
-      } catch (error) {
-        console.error("❌ Error in handlePlaidSuccess:", error);
-        setError(
-          error instanceof Error ? error.message : "Failed to connect bank account"
-        );
-        setBankConnected(false);
-        setLoadingTransactions(false);
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
       }
-    },
-    [fetchTransactions, savedTransactions, savedDebt]
-  );
 
-  // Auto-connect in sandbox mode
-  useEffect(() => {
-    if (
-      config.plaid.isSandbox &&
-      user &&
-      !bankConnected &&
-      !loadingTransactions &&
-      !hasLoadedFromStorage.current // Don't auto-connect if we've loaded from storage
-    ) {
-      console.log("🏦 Auto-connecting in sandbox mode...");
-      handlePlaidSuccess(); // No token needed, will auto-generate one
+      const data = await response.json();
+      console.log(`Loaded ${data.length} sample transactions`);
+      
+      setTransactions(
+        data.map((t) => ({
+          ...t,
+          societalDebt: 0,
+          unethicalPractices: t.unethicalPractices || [],
+          ethicalPractices: t.ethicalPractices || [],
+          information: t.information || {}
+        }))
+      );
+      
+      setAnalysisCompleted(false);
+      setLoadingTransactions(false);
+      return;
     }
-  }, [user, bankConnected, loadingTransactions, handlePlaidSuccess]);
 
+    // Fix the API path here too
+    const response = await fetch("/api/banking/exchange_token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ public_token }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to exchange Plaid token");
+    }
+
+    const data = await response.json();
+    if (data.access_token) {
+      console.log("✅ Received Plaid Access Token");
+      fetchTransactions(data.access_token);
+    } else {
+      throw new Error("No access token received from Plaid");
+    }
+  } catch (error) {
+    console.error("❌ Error in handlePlaidSuccess:", error);
+    setError(error instanceof Error ? error.message : "Failed to connect bank account");
+    setBankConnected(false);
+    setLoadingTransactions(false);
+  }
+}, [fetchTransactions]);
+
+
+// Auto-connect in sandbox mode
+useEffect(() => {
+  if (config.plaid.useSampleData && 
+      user && !bankConnected && !loadingTransactions) {
+    console.log("🏦 Auto-connecting with sample data...");
+    handlePlaidSuccess();
+  }
+}, [user, bankConnected, loadingTransactions, handlePlaidSuccess]);
   // Render loading state during authentication or storage loading
   if (authLoading || storageLoading) {
     return (
@@ -508,9 +500,9 @@ export default function Dashboard() {
         {storageError && <ErrorAlert message={storageError} />}
 
         {/* Plaid connection section - only show if no transactions or saved data */}
-        {!bankConnected && !config.plaid.isSandbox && (
+        {/* {!bankConnected && !config.plaid.isSandbox && ( */}
           <PlaidConnectionSection onSuccess={handlePlaidSuccess} />
-        )}
+        {/* )} */}
 
         {/* Loading states */}
         {bankConnected && loadingTransactions && (

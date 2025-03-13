@@ -53,9 +53,21 @@ export default function PlaidLink({ onSuccess }: PlaidLinkProps) {
     if (config.plaid.isSandbox) {
       setLoading(true);
       try {
-        // In sandbox mode, just call onSuccess directly with null
-        console.warn("⚡ Using sample data in sandbox mode...");
-        onSuccess(null); // Pass null to indicate sandbox mock mode
+        // In sandbox mode, generate a sandbox token before calling onSuccess
+        const response = await fetch("/api/banking/sandbox_token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        
+        if (!response.ok) {
+          throw new Error("Failed to create sandbox token");
+        }
+        
+        const data = await response.json();
+        console.log("✅ Generated sandbox token:", data.public_token);
+        
+        // Now call onSuccess with the actual sandbox token
+        onSuccess(data.public_token);
       } catch (error) {
         console.error("❌ Error in sandbox mode:", error);
       } finally {
