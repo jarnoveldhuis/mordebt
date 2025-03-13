@@ -5,25 +5,29 @@ import { useAuth } from "@/shared/hooks/useAuth";
 import { Transaction } from '@/shared/types/transactions';
 import { Header } from "@/shared/components/Header";
 import { PlaidConnectionSection } from "@/app/api/banking/PlaidConnectionSection";
-import { TransactionList } from "@/features/analysis/TransactionList";
-import { PracticeDebtTable } from "@/features/analysis/PracticeDebtTable";
 import { LoadingSpinner } from "@/shared/components/ui/LoadingSpinner";
 import { ErrorAlert } from "@/shared/components/ui/ErrorAlert";
+import { TabView } from "@/features/analysis/TabView";
 import { config } from "@/config/index";
-
-
+import { useTransactionStorage } from "@/features/analysis/transactionStorageHook"; 
 
 export default function Dashboard() {
   const { user, loading: authLoading, logout } = useAuth();
+  // Use the storage hook
+  const { 
+    savedTransactions, 
+    totalSocietalDebt: savedDebt, 
+    isLoading: storageLoading, 
+    error: storageError,
+    saveTransactions
+  } = useTransactionStorage(user);
 
   // State management
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [totalSocietalDebt, setTotalSocietalDebt] = useState<number | null>(null);
-  const [practiceDonations, setPracticeDonations] = useState<
-    Record<string, { charity: { name: string; url: string } | null; amount: number }>
-  >({});
   const [bankConnected, setBankConnected] = useState(false);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("Loading transactions...");
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisCompleted, setAnalysisCompleted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +45,16 @@ export default function Dashboard() {
     if (value <= 50) return "text-red-500";
     return "text-red-700";
   }
+
+  // Load saved transactions if available
+  useEffect(() => {
+    if (savedTransactions && savedTransactions.length > 0 && !analysisCompleted) {
+      console.log("Loading saved transactions from Firebase");
+      setTransactions(savedTransactions);
+      setTotalSocietalDebt(savedDebt);
+      setAnalysisCompleted(true);
+    }
+  }, [savedTransactions, savedDebt, analysisCompleted]);
 
   // Core functionality
   const handleAnalyze = useCallback(
@@ -98,32 +112,15 @@ export default function Dashboard() {
             );
 
           setTransactions(sortedTransactions);
-
-          let totalDebt = 0;
-          const newPracticeDonations: Record<
-            string,
-            { charity: { name: string; url: string } | null; amount: number }
-          > = {};
-
-          data.transactions.forEach((tx: Transaction) => {
-            totalDebt += tx.societalDebt || 0;
-            Object.entries(tx.practiceDebts || {}).forEach(
-              ([practice, amount]) => {
-                const assignedCharity = tx.charities?.[practice] || null;
-                if (!newPracticeDonations[practice]) {
-                  newPracticeDonations[practice] = {
-                    charity: assignedCharity,
-                    amount: 0,
-                  };
-                }
-                newPracticeDonations[practice].amount += amount;
-              }
-            );
-          });
-
-          setTotalSocietalDebt(totalDebt);
-          setPracticeDonations(newPracticeDonations);
+          setTotalSocietalDebt(data.totalSocietalDebt);
           setAnalysisCompleted(true);
+          
+          // Save to Firebase
+          if (user) {
+            saveTransactions(sortedTransactions, data.totalSocietalDebt)
+              .catch(err => console.error("Failed to save to Firebase:", err));
+          }
+          
           console.log("Analysis completed successfully");
         }
       } catch (error) {
@@ -135,7 +132,7 @@ export default function Dashboard() {
         isAnalyzingManually.current = false;
       }
     },
-    [transactions, analysisCompleted, analyzing]
+    [transactions, analysisCompleted, analyzing, user, saveTransactions]
   );
 
   // This effect only runs when transactions change and analysis hasn't been done
@@ -155,8 +152,8 @@ export default function Dashboard() {
   
   const fetchTransactions = useCallback(async (token: string) => {
     setLoadingTransactions(true);
+    setLoadingMessage("Loading transactions..."); // Reset to default message
     setError(null);
-    let productNotReady = false;
 
     try {
       const response = await fetch("/api/banking/transactions", {
@@ -166,11 +163,17 @@ export default function Dashboard() {
       });
 
       if (response.status === 503) {
-        productNotReady = true;
         const errorData = await response.json();
         console.warn("🚧 Transactions not ready:", errorData.error);
-        setError("Transactions data is not ready yet. Thank you for your patience.");
-        // Optionally schedule an auto-retry in 10 seconds:
+        
+        // Update the loading message instead of setting an error
+        setLoadingMessage("Transactions data is not ready yet. Please wait...");
+        
+        // Optionally set up an auto-retry after a delay
+        setTimeout(() => {
+          fetchTransactions(token);
+        }, 5000); // Retry after 5 seconds
+        
         return;
       }
 
@@ -195,90 +198,87 @@ export default function Dashboard() {
         
         // Reset analysis state
         setAnalysisCompleted(false);
+        setLoadingTransactions(false);
         
         // Let the useEffect trigger the analysis instead
       } else {
         console.warn("⚠️ No transactions found.");
         setError("No transactions found in your account.");
+        setLoadingTransactions(false);
       }
     } catch (error) {
       console.error("❌ Error in fetchTransactions:", error);
       setError(error instanceof Error ? error.message : "Failed to fetch transactions");
-    } finally {
-      // Only stop spinner if it wasn't "PRODUCT_NOT_READY"
-      if (!productNotReady) {
-        setLoadingTransactions(false);
-      }
+      setLoadingTransactions(false);
     }
   }, []);
 
-  // src/app/dashboard/page.tsx
-const handlePlaidSuccess = useCallback(async (public_token?: string) => {
-  try {
-    setBankConnected(true);
-    setLoadingTransactions(true);
-    setError(null);
+  // Handle Plaid success
+  const handlePlaidSuccess = useCallback(async (public_token?: string) => {
+    try {
+      setBankConnected(true);
+      setLoadingTransactions(true);
+      setError(null);
 
-    // Check if we should use sample data
-    if (config.plaid.useSampleData || config.plaid.isSandbox) {
-      console.log("⚡ Using sample data instead of Plaid API...");
-      
-      // Directly call the transactions endpoint with a flag for sample data
-      const response = await fetch("/api/banking/transactions", {
+      // Check if we should use sample data
+      if (config.plaid.useSampleData || config.plaid.isSandbox) {
+        console.log("⚡ Using sample data instead of Plaid API...");
+        
+        // Directly call the transactions endpoint with a flag for sample data
+        const response = await fetch("/api/banking/transactions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ useSampleData: true }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log(`Loaded ${data.length} sample transactions`);
+        
+        setTransactions(
+          data.map((t: Record<string, unknown>) => ({
+
+            ...t,
+            societalDebt: 0,
+            unethicalPractices: t.unethicalPractices || [],
+            ethicalPractices: t.ethicalPractices || [],
+            information: t.information || {}
+          }))
+        );
+        
+        setAnalysisCompleted(false);
+        setLoadingTransactions(false);
+        return;
+      }
+
+      // Regular Plaid flow (only runs if not using sample data)
+      const response = await fetch("/api/banking/exchange_token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ useSampleData: true }),
+        body: JSON.stringify({ public_token }),
       });
 
       if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`);
+        throw new Error("Failed to exchange Plaid token");
       }
 
       const data = await response.json();
-      console.log(`Loaded ${data.length} sample transactions`);
-      
-      setTransactions(
-        data.map((t) => ({
-          ...t,
-          societalDebt: 0,
-          unethicalPractices: t.unethicalPractices || [],
-          ethicalPractices: t.ethicalPractices || [],
-          information: t.information || {}
-        }))
-      );
-      
-      setAnalysisCompleted(false);
+      if (data.access_token) {
+        console.log("✅ Received Plaid Access Token");
+        fetchTransactions(data.access_token);
+      } else {
+        throw new Error("No access token received from Plaid");
+      }
+    } catch (error) {
+      console.error("❌ Error in handlePlaidSuccess:", error);
+      setError(error instanceof Error ? error.message : "Failed to connect bank account");
+      setBankConnected(false);
       setLoadingTransactions(false);
-      return;
     }
-
-    // Regular Plaid flow (only runs if not using sample data)
-    const response = await fetch("/api/banking/exchange_token", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ public_token }),
-    });
-
-    if (!response.ok) {
-      throw new Error("Failed to exchange Plaid token");
-    }
-
-    const data = await response.json();
-    if (data.access_token) {
-      console.log("✅ Received Plaid Access Token");
-      fetchTransactions(data.access_token);
-    } else {
-      throw new Error("No access token received from Plaid");
-    }
-  } catch (error) {
-    console.error("❌ Error in handlePlaidSuccess:", error);
-    setError(error instanceof Error ? error.message : "Failed to connect bank account");
-    setBankConnected(false);
-    setLoadingTransactions(false);
-  }
-}, [fetchTransactions]);
-
-
+  }, [fetchTransactions]);
 
   // Auto-connect in sandbox mode
   useEffect(() => {
@@ -288,9 +288,13 @@ const handlePlaidSuccess = useCallback(async (public_token?: string) => {
     }
   }, [user, bankConnected, loadingTransactions, handlePlaidSuccess]);
 
-  // Render loading state during authentication check
-  if (authLoading) {
-    return <div className="text-center mt-10"><LoadingSpinner message="Checking authentication..." /></div>;
+  // Render loading state during authentication or storage loading
+  if (authLoading || storageLoading) {
+    return (
+      <div className="text-center mt-10">
+        <LoadingSpinner message={authLoading ? "Checking authentication..." : "Loading your saved data..."} />
+      </div>
+    );
   }
 
   // Redirect if no user is found (this is handled by useAuth hook now)
@@ -300,8 +304,8 @@ const handlePlaidSuccess = useCallback(async (public_token?: string) => {
 
   // Main render
   return (
-    <div className="min-h-screen bg-gray-100 flex justify-center items-center">
-      <div className="bg-white shadow-lg rounded-lg p-8 max-w-2xl w-full">
+    <div className="min-h-screen bg-gray-100 flex justify-center">
+      <div className="bg-white shadow-lg rounded-lg p-4 sm:p-8 max-w-2xl w-full mt-4 sm:mt-8">
         {/* Header with user info and logout */}
         <Header user={user} onLogout={logout} />
 
@@ -309,17 +313,18 @@ const handlePlaidSuccess = useCallback(async (public_token?: string) => {
           Societal Debt Calculator
         </h1>
 
-        {/* Error display */}
+        {/* Error display - show both API and storage errors */}
         {error && <ErrorAlert message={error} />}
+        {storageError && <ErrorAlert message={storageError} />}
 
         {/* Plaid connection section */}
-        {!bankConnected && !config.plaid.isSandbox && (
+        {!bankConnected && !analysisCompleted && !config.plaid.isSandbox && (
           <PlaidConnectionSection onSuccess={handlePlaidSuccess} />
         )}
 
         {/* Loading states */}
         {bankConnected && loadingTransactions && (
-          <LoadingSpinner message="Loading transactions..." />
+          <LoadingSpinner message={loadingMessage} />
         )}
 
         {analyzing && (
@@ -328,17 +333,10 @@ const handlePlaidSuccess = useCallback(async (public_token?: string) => {
 
         {/* Main content areas */}
         {transactions.length > 0 && !loadingTransactions && (
-          <TransactionList 
-            transactions={transactions} 
-            getColorClass={getColorClass} 
-          />
-        )}
-
-        {totalSocietalDebt !== null && !analyzing && (
-          <PracticeDebtTable
-            practiceDonations={practiceDonations}
+          <TabView
             transactions={transactions}
-            totalSocietalDebt={totalSocietalDebt}
+            totalSocietalDebt={totalSocietalDebt || 0}
+            getColorClass={getColorClass}
           />
         )}
       </div>

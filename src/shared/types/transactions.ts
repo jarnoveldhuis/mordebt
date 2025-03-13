@@ -14,6 +14,7 @@ export interface Transaction {
   practiceWeights?: Record<string, number>; // percentages
   practiceDebts?: Record<string, number>; // + or -
   practiceSearchTerms?: Record<string, string>; // search terms for charity lookup
+  practiceCategories?: Record<string, string>; // categories for practices like "Climate Change", "Poverty", etc.
   charities?: Record<string, Charity>;
   information?: Record<string, string>; // Information per practice
 }

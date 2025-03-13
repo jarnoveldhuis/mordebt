@@ -1,4 +1,4 @@
-// src/features/transactions/prompts.ts
+// src/features/analysis/prompts.ts
 export const transactionAnalysisPrompt = `
 You are an AI that analyzes financial transactions to calculate societal debt - the ethical impact of consumer spending.
 
@@ -53,6 +53,15 @@ Rules:
 5) For each practice, provide:
    - A concise impact description (under 15 words)
    - For every practice, include a "searchTerm" that's optimized for charity searches
+   - Assign a "category" for each practice from the following list:
+     * "Climate Change" - For practices related to emissions, energy usage, and environmental degradation
+     * "Poverty" - For practices related to economic inequality, exploitation, and access
+     * "Food Insecurity" - For practices related to food systems, agriculture, and nutrition
+     * "Conflict" - For practices related to resource conflicts, human rights, and exploitation
+     * "Inequality" - For practices related to social justice, fairness, and discrimination
+     * "Animal Welfare" - For practices related to treatment of animals and animal rights
+     * "Public Health" - For practices related to health impacts, safety, and wellbeing
+     * "Digital Rights" - For practices related to privacy, surveillance, and digital freedoms
    - Use these exact search term mappings:
      * Factory Farming → "animal welfare"
      * High Emissions → "climate"
@@ -86,6 +95,9 @@ Return ONLY strict JSON with no additional text or markdown:
     "practiceSearchTerms": {
         "Factory Farming": "animal welfare"
     },
+    "practiceCategories": {
+        "Factory Farming": "Food Insecurity"
+    },
     "information": {
         "Factory Farming": "Relies on industrial meat production with environmental and animal welfare concerns."
     }
@@ -103,6 +115,10 @@ Return ONLY strict JSON with no additional text or markdown:
     "practiceSearchTerms": {
         "Data Privacy Issues": "digital rights",
         "Clean Energy Usage": "renewable energy"
+    },
+    "practiceCategories": {
+        "Data Privacy Issues": "Digital Rights",
+        "Clean Energy Usage": "Climate Change"
     },
     "information": {
         "Data Privacy Issues": "Collects and monetizes extensive user data with privacy implications.",

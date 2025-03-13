@@ -1,6 +1,8 @@
-// src/features/transactions/types.ts
-
-import { Charity } from "@/shared/types/transactions";
+// src/shared/types/transactions.ts
+export interface Charity {
+  name: string;
+  url: string;
+}
 
 export interface Transaction {
   date: string;
@@ -12,6 +14,7 @@ export interface Transaction {
   practiceWeights?: Record<string, number>; // percentages
   practiceDebts?: Record<string, number>; // + or -
   practiceSearchTerms?: Record<string, string>; // search terms for charity lookup
+  practiceCategories?: Record<string, string>; // categories for practices like "Climate Change", "Poverty", etc.
   charities?: Record<string, Charity>;
   information?: Record<string, string>; // Information per practice
 }
@@ -22,6 +25,8 @@ export interface AnalyzedTransactionData {
   debtPercentage: number;
 }
 
-export interface AnalysisRequest {
-  transactions: Transaction[];
+export interface PlaidError {
+  error_code: string;
+  error_message: string;
+  display_message: string | null;
 }
