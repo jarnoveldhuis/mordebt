@@ -2,12 +2,12 @@
 // API-specific logic for handling HTTP requests and responses
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeTransactionsCore } from "../transactionAnalysisService";
-import { AnalysisRequest } from "../types";
+import { AnalyzedTransactionData } from "../types";
 
 export async function analyzeTransactionsHandler(req: NextRequest) {
   try {
     // Parse and validate the incoming request
-    const requestData = await req.json() as AnalysisRequest;
+    const requestData = await req.json() as AnalyzedTransactionData;
     
     if (!requestData.transactions || !Array.isArray(requestData.transactions)) {
       return NextResponse.json(

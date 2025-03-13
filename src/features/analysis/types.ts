@@ -30,3 +30,4 @@ export interface PlaidError {
   error_message: string;
   display_message: string | null;
 }
+
