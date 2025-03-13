@@ -1,5 +1,4 @@
-// src/features/transactions/transactionAnalysisService.ts
-// Domain logic for analyzing transactions - no HTTP concerns
+// src/features/analysis/transactionAnalysisService.ts
 import OpenAI from "openai";
 import { Transaction, AnalyzedTransactionData } from "./types";
 import { transactionAnalysisPrompt } from "./prompts";
@@ -18,12 +17,20 @@ export async function analyzeTransactionsCore(transactions: Transaction[]): Prom
     throw new Error("Invalid transactions data");
   }
 
+  // Skip any transactions that are already analyzed
+  const transactionsToAnalyze = transactions.filter(tx => !tx.analyzed);
+  
+  if (transactionsToAnalyze.length === 0) {
+    // If all transactions are already analyzed, just calculate totals
+    return processAnalyzedTransactions(transactions);
+  }
+
   const openai = new OpenAI({
     apiKey: config.openai.apiKey,
     timeout: config.openai.timeout,
   });
 
-  console.log("📡 Sending request to OpenAI...");
+  console.log(`📡 Sending ${transactionsToAnalyze.length} transactions to OpenAI...`);
 
   const response = await openai.chat.completions.create({
     model: config.openai.model,
@@ -34,7 +41,7 @@ export async function analyzeTransactionsCore(transactions: Transaction[]): Prom
       },
       {
         role: "user",
-        content: JSON.stringify({ transactions }),
+        content: JSON.stringify({ transactions: transactionsToAnalyze }),
       },
     ],
   });
@@ -60,16 +67,41 @@ export async function analyzeTransactionsCore(transactions: Transaction[]): Prom
     throw new Error("No transactions in OpenAI response");
   }
 
-  return processAnalyzedTransactions(analyzedData.transactions);
+  // Create a mapping of analyzed transactions by a unique identifier
+  const analyzedTransactionMap = new Map<string, Transaction>();
+  analyzedData.transactions.forEach(tx => {
+    // Create a unique identifier based on date, name, and amount
+    const identifier = `${tx.date}-${tx.name}-${tx.amount}`;
+    analyzedTransactionMap.set(identifier, {
+      ...tx,
+      analyzed: true // Mark as analyzed
+    });
+  });
+
+  // Merge with original transactions, preserving any that weren't sent for analysis
+  const mergedTransactions = transactions.map(tx => {
+    const identifier = `${tx.date}-${tx.name}-${tx.amount}`;
+    if (analyzedTransactionMap.has(identifier)) {
+      return analyzedTransactionMap.get(identifier)!;
+    }
+    return tx;
+  });
+
+  return processAnalyzedTransactions(mergedTransactions);
 }
 
 /**
  * Process the transactions returned from the AI
  * Apply business rules for calculating societal debt
  */
-export function processAnalyzedTransactions(aiTransactions: Transaction[]): AnalyzedTransactionData {
+export function processAnalyzedTransactions(transactions: Transaction[]): AnalyzedTransactionData {
   // Process transactions with practice weights and search terms
-  const updatedTransactions = aiTransactions.map((t) => {
+  const updatedTransactions = transactions.map((t) => {
+    // Skip processing if transaction is already fully processed
+    if (t.societalDebt !== undefined && t.practiceDebts && Object.keys(t.practiceDebts).length > 0) {
+      return t;
+    }
+
     const practiceDebts: Record<string, number> = {};
     let newSocietalDebt = 0;
 
@@ -81,7 +113,7 @@ export function processAnalyzedTransactions(aiTransactions: Transaction[]): Anal
     const information = t.information || {};
 
     // Build search terms if not provided by the API
-    const builtSearchTerms: Record<string, string> = {};
+    const builtSearchTerms: Record<string, string> = {...practiceSearchTerms};
     
     // Default search term mappings
     const defaultMappings: Record<string, string> = {
@@ -102,13 +134,8 @@ export function processAnalyzedTransactions(aiTransactions: Transaction[]): Anal
 
     // Combine unethical and ethical practices for search term processing
     [...unethicalPractices, ...ethicalPractices].forEach(practice => {
-      if (practiceSearchTerms[practice]) {
-        builtSearchTerms[practice] = practiceSearchTerms[practice];
-      } else if (defaultMappings[practice]) {
-        builtSearchTerms[practice] = defaultMappings[practice];
-      } else {
-        // Use the practice itself as a fallback
-        builtSearchTerms[practice] = practice.toLowerCase();
+      if (!builtSearchTerms[practice]) {
+        builtSearchTerms[practice] = defaultMappings[practice] || practice.toLowerCase();
       }
     });
 
@@ -141,7 +168,8 @@ export function processAnalyzedTransactions(aiTransactions: Transaction[]): Anal
       ethicalPractices,
       practiceWeights,
       practiceSearchTerms: builtSearchTerms,
-      information
+      information,
+      analyzed: true // Mark as analyzed
     };
   });
 
