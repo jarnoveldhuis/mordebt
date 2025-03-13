@@ -214,7 +214,7 @@ export default function Dashboard() {
   }, []);
 
   // Handle Plaid success
-  const handlePlaidSuccess = useCallback(async (public_token?: string) => {
+  const handlePlaidSuccess = (public_token?: string | null) => {
     try {
       setBankConnected(true);
       setLoadingTransactions(true);

@@ -22,7 +22,7 @@ declare global {
 }
 
 interface PlaidLinkProps {
-  onSuccess: (public_token: string) => void;
+  onSuccess: (public_token: string | null) => void; // Accept string or null
 }
 
 export default function PlaidLink({ onSuccess }: PlaidLinkProps) {
@@ -53,10 +53,9 @@ export default function PlaidLink({ onSuccess }: PlaidLinkProps) {
     if (config.plaid.isSandbox) {
       setLoading(true);
       try {
-        // In sandbox mode, just call onSuccess directly with a dummy token
-        // or skip token entirely by passing null
+        // Pass null to the onSuccess callback
         console.warn("⚡ Using sample data in sandbox mode...");
-        onSuccess(null); // Pass null to indicate sandbox mock mode
+        onSuccess(null); // This will now be type-compatible
       } catch (error) {
         console.error("❌ Error in sandbox mode:", error);
       } finally {
