@@ -1,13 +1,13 @@
-// src/features/transactions/api/analyzeTransactionsHandler.ts
+// src/features/analysis/api/analyzeTransactionsHandler.ts
 // API-specific logic for handling HTTP requests and responses
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeTransactionsCore } from "../transactionAnalysisService";
-import { AnalyzedTransactionData } from "../types";
+import { AnalysisRequest } from "../types";
 
 export async function analyzeTransactionsHandler(req: NextRequest) {
   try {
     // Parse and validate the incoming request
-    const requestData = await req.json() as AnalyzedTransactionData;
+    const requestData = await req.json() as AnalysisRequest;
     
     if (!requestData.transactions || !Array.isArray(requestData.transactions)) {
       return NextResponse.json(

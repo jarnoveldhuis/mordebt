@@ -31,3 +31,6 @@ export interface PlaidError {
   display_message: string | null;
 }
 
+export interface AnalysisRequest {
+  transactions: Transaction[];
+}

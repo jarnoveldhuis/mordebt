@@ -1,4 +1,4 @@
-// Improved version of src/features/analysis/transactionStorageHook.ts
+// src/features/analysis/transactionStorageHook.ts
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '@/shared/firebase/firebase';
 import { collection, addDoc, query, where, orderBy, getDocs, limit, Timestamp, DocumentData } from 'firebase/firestore';
