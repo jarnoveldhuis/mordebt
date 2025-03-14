@@ -968,7 +968,11 @@ const PremiumDashboard = () => {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                               <button
-                                onClick={() => handleOffset(transaction)}
+                                onClick={() => handleOffset({ 
+                                  name: transaction.description, 
+                                  description: transaction.description, 
+                                  impact: transaction.impact 
+                                })}
                                 className={`bg-gradient-to-r ${getThemeColor(
                                   "dark"
                                 )} px-3 py-1 rounded-full text-xs`}
