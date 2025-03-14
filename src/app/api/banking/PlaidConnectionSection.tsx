@@ -1,7 +1,9 @@
+// src/app/api/banking/PlaidConnectionSection.tsx
+
 import PlaidLink from "@/features/banking/PlaidLink";
 
 interface PlaidConnectionSectionProps {
-  onSuccess: (public_token: string) => void;
+  onSuccess: (public_token: string | null) => void;
 }
 
 export function PlaidConnectionSection({ onSuccess }: PlaidConnectionSectionProps) {
