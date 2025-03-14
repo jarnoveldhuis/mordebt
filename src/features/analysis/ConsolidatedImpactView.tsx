@@ -1,4 +1,5 @@
-// src/features/analysis/ConsolidatedImpactView.tsx
+"use client";
+
 import React, { useState, useMemo } from "react";
 import { Transaction } from "@/shared/types/transactions";
 import { DonationModal } from "@/features/charity/DonationModal";
@@ -26,16 +27,26 @@ export function ConsolidatedImpactView({
   const [selectedPractice, setSelectedPractice] = useState<string | null>(null);
   const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
 
-  // Group by practice directly
+  // Group by practice directly - safely handling empty arrays
   const practiceImpacts = useMemo(() => {
+    // Guard against undefined or empty transactions
+    if (!transactions || transactions.length === 0) {
+      return [];
+    }
+    
     // Create a mapping to track practice impacts
     const impactsByPractice: Record<string, PracticeImpact> = {};
     
     // Process all transactions
     transactions.forEach(transaction => {
+      // Safely access arrays with defaults
+      const unethicalPractices = transaction.unethicalPractices || [];
+      const ethicalPractices = transaction.ethicalPractices || [];
+      const practiceWeights = transaction.practiceWeights || {};
+      
       // Process unethical practices (positive debt)
-      (transaction.unethicalPractices || []).forEach(practice => {
-        const weight = transaction.practiceWeights?.[practice] || 0;
+      unethicalPractices.forEach(practice => {
+        const weight = practiceWeights[practice] || 0;
         const amount = transaction.amount * (weight / 100);
         
         // Initialize practice if needed
@@ -68,8 +79,8 @@ export function ConsolidatedImpactView({
       });
       
       // Process ethical practices (negative debt)
-      (transaction.ethicalPractices || []).forEach(practice => {
-        const weight = transaction.practiceWeights?.[practice] || 0;
+      ethicalPractices.forEach(practice => {
+        const weight = practiceWeights[practice] || 0;
         const amount = -1 * (transaction.amount * (weight / 100));
         
         // Initialize practice if needed

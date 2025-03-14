@@ -11,7 +11,7 @@ export const config = {
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
-    model: "o3-mini",
+    model: "gpt-4o-mini-search-preview",
     timeout: 120000, // 2 minutes
   },
   firebase: {

@@ -1,4 +1,3 @@
-// Remove unused savedDebt variable in dashboard/page.tsx
 "use client";
 
 import { useEffect, useCallback, useRef, useState } from "react";
@@ -18,7 +17,7 @@ import { loadUserTransactions, userHasData, deleteAllUserTransactions } from "@/
 import { Transaction } from "@/shared/types/transactions";
 
 // Helper function to get color class for debt values
-function getColorClass(value: number) {
+function getColorClass(value: number): string {
   if (value < 0) return "text-green-500";
   if (value === 0) return "text-blue-500";
   if (value <= 10) return "text-yellow-500";
@@ -70,7 +69,6 @@ export default function Dashboard() {
   // Determine if we're in development/sandbox mode
   const isSandboxMode = process.env.NODE_ENV === 'development' || config.plaid.isSandbox;
   
-
   // Auto-enable Firebase debugging in development
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
@@ -319,9 +317,10 @@ export default function Dashboard() {
 
   // Determine if we have data to show
   const hasData = Boolean(analyzedData && analyzedData.transactions.length > 0);
-  const isLoading = connectionStatus.isConnected && connectionStatus.isLoading || 
+  const isLoading = connectionStatus.isLoading || 
                     analysisStatus.status === 'loading' || 
-                    storageLoading || isLoadingDirectRef.current;
+                    storageLoading || 
+                    isLoadingDirectRef.current;
   const error = connectionStatus.error || analysisStatus.error || storageError;
   
   // Main render
@@ -363,10 +362,10 @@ export default function Dashboard() {
         )}
 
         {/* Main content - show when we have analyzed data */}
-        {hasData && (
+        {hasData && analyzedData && (
           <TabView
-            transactions={analyzedData!.transactions}
-            totalSocietalDebt={analyzedData!.totalSocietalDebt}
+            transactions={analyzedData.transactions}
+            totalSocietalDebt={analyzedData.totalSocietalDebt}
             getColorClass={getColorClass}
           />
         )}

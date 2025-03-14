@@ -1,4 +1,5 @@
-// src/features/analysis/CategoryExperimentView.tsx
+"use client";
+
 import React, { useState, useMemo } from "react";
 import { Transaction } from "@/shared/types/transactions";
 import { DonationModal } from "@/features/charity/DonationModal";
@@ -46,14 +47,24 @@ export function CategoryExperimentView({
 
   // Process data to group by categories and practices
   const categoryData = useMemo(() => {
-    // First group practices like in ConsolidatedImpactView
+    // Guard against undefined or empty transactions
+    if (!transactions || transactions.length === 0) {
+      return [];
+    }
+    
+    // First group practices
     const practiceMap: Record<string, PracticeData> = {};
     
     // Process all transactions to gather practice data
     transactions.forEach(transaction => {
+      // Safely access arrays with defaults
+      const unethicalPractices = transaction.unethicalPractices || [];
+      const ethicalPractices = transaction.ethicalPractices || [];
+      const practiceWeights = transaction.practiceWeights || {};
+      
       // Process unethical practices (positive debt)
-      (transaction.unethicalPractices || []).forEach(practice => {
-        const weight = transaction.practiceWeights?.[practice] || 0;
+      unethicalPractices.forEach(practice => {
+        const weight = practiceWeights[practice] || 0;
         const amount = transaction.amount * (weight / 100);
         
         // Initialize practice if needed
@@ -86,8 +97,8 @@ export function CategoryExperimentView({
       });
       
       // Process ethical practices (negative debt)
-      (transaction.ethicalPractices || []).forEach(practice => {
-        const weight = transaction.practiceWeights?.[practice] || 0;
+      ethicalPractices.forEach(practice => {
+        const weight = practiceWeights[practice] || 0;
         const amount = -1 * (transaction.amount * (weight / 100));
         
         // Initialize practice if needed
@@ -378,19 +389,23 @@ export function CategoryExperimentView({
                       
                       {/* Vendor contributions */}
                       <div className="flex flex-wrap gap-1 mt-1">
-                        {practice.vendorContributions.map((vendor, vIdx) => (
-                          <span 
-                            key={vIdx} 
-                            className={`inline-flex items-center px-1 sm:px-2 py-0.5 rounded-full text-xs font-medium ${
-                              vendor.amount > 0 ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
-                            }`}
-                          >
-                            <span className="truncate max-w-[80px] sm:max-w-full">{vendor.vendorName}</span>
-                            <span className="ml-1 opacity-75 whitespace-nowrap">
-                              ${Math.abs(vendor.amount).toFixed(2)}
+                        {practice.vendorContributions.length > 0 ? (
+                          practice.vendorContributions.map((vendor, vIdx) => (
+                            <span 
+                              key={vIdx} 
+                              className={`inline-flex items-center px-1 sm:px-2 py-0.5 rounded-full text-xs font-medium ${
+                                vendor.amount > 0 ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                              }`}
+                            >
+                              <span className="truncate max-w-[80px] sm:max-w-full">{vendor.vendorName}</span>
+                              <span className="ml-1 opacity-75 whitespace-nowrap">
+                                ${Math.abs(vendor.amount).toFixed(2)}
+                              </span>
                             </span>
-                          </span>
-                        ))}
+                          ))
+                        ) : (
+                          <span className="text-xs text-gray-500 italic">No vendor contributions</span>
+                        )}
                       </div>
                     </div>
                   ))}
