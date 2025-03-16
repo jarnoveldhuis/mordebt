@@ -18,6 +18,7 @@ interface UseBankConnectionResult {
   connectionStatus: ConnectionStatus;
   transactions: Transaction[];
   connectBank: (publicToken: string | null, options?: ConnectionOptions) => Promise<void>;
+  disconnectBank: () => void;
   setTransactions: (transactions: Transaction[]) => void; // Added for direct setting
 }
 
@@ -161,6 +162,13 @@ export function useBankConnection(): UseBankConnectionResult {
         throw new Error("No access token received from Plaid");
       }
 
+      // Store access token in localStorage for recovery in case of page refresh
+      try {
+        localStorage.setItem('plaid_access_token', tokenData.access_token);
+      } catch (error) {
+        console.warn("Could not store access token in localStorage:", error);
+      }
+
       // Fetch transactions with the access token
       const fetchedTransactions = await fetchTransactions(tokenData.access_token);
       
@@ -193,6 +201,27 @@ export function useBankConnection(): UseBankConnectionResult {
     }
   }, [fetchTransactions]);
 
+  // Add disconnect function
+  const disconnectBank = useCallback(() => {
+    console.log("Disconnecting bank account");
+    
+    // Clear any stored access token
+    try {
+      localStorage.removeItem('plaid_access_token');
+    } catch (error) {
+      console.warn("Could not remove access token from localStorage:", error);
+    }
+    
+    // Reset state
+    setTransactions([]);
+    setConnectionStatus({
+      isConnected: false,
+      isLoading: false,
+      error: null
+    });
+    
+  }, []);
+
   // Direct setter for transactions
   // This allows bypassing the Plaid API entirely for testing
   const setTransactionsDirect = useCallback((newTransactions: Transaction[]) => {
@@ -220,6 +249,7 @@ export function useBankConnection(): UseBankConnectionResult {
     connectionStatus,
     transactions,
     connectBank,
+    disconnectBank,
     setTransactions: setTransactionsDirect
   };
 }

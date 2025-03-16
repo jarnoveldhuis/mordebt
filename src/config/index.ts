@@ -12,7 +12,10 @@ export const config = {
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
     model: "gpt-4o-mini-search-preview",
-    timeout: 120000, // 2 minutes
+    timeout: 180000, // 3 minutes - increased for web search operations
+    webSearchEnabled: true, // Flag to indicate we're using web search capabilities
+    searchContextSize: "low", // Use minimal search context to reduce costs and speed up response
+
   },
   firebase: {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,

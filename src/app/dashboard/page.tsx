@@ -1,3 +1,4 @@
+// src/app/dashboard/page.tsx - Updated with bank disconnect functionality
 "use client";
 
 import { useEffect, useCallback, useRef, useState } from "react";
@@ -56,6 +57,7 @@ export default function Dashboard() {
     connectionStatus,
     transactions: bankTransactions,
     connectBank,
+    disconnectBank,
     setTransactions: setBankTransactions 
   } = useBankConnection();
 
@@ -102,6 +104,17 @@ export default function Dashboard() {
     analyzeTransactions(initializedTransactions);
   }, [setBankTransactions, analyzeTransactions]);
 
+  // Handler for disconnecting bank account
+  const handleDisconnectBank = useCallback(() => {
+    // Reset UI state
+    resetStorage();
+    
+    // Disconnect the bank account
+    disconnectBank();
+    
+    console.log("Bank account disconnected");
+  }, [resetStorage, disconnectBank]);
+
   // Detect user changes using a ref instead of state
   useEffect(() => {
     const currentUserId = user?.uid || null;
@@ -115,6 +128,7 @@ export default function Dashboard() {
       if (!currentUserId && previousUserId) {
         console.log("User logged out");
         resetStorage();
+        disconnectBank(); // Also disconnect bank account on logout
         // The useAuth hook will handle redirection
       }
       
@@ -128,13 +142,14 @@ export default function Dashboard() {
       if (currentUserId && previousUserId && currentUserId !== previousUserId) {
         console.log("Different user logged in");
         resetStorage();
+        disconnectBank(); // Also disconnect bank account on user switch
         setDirectLoadAttempted(false); // Reset direct load flag on user switch
       }
     }
     
     // Update the previous user ref
     previousUserIdRef.current = currentUserId;
-  }, [user, resetStorage]);
+  }, [user, resetStorage, disconnectBank]);
 
   // Try to load data directly from Firebase if hook-based loading fails
   const loadDirectFromFirebase = useCallback(async () => {
@@ -277,8 +292,9 @@ export default function Dashboard() {
   const handleLogout = useCallback(() => {
     console.log("User initiated logout");
     resetStorage();
+    disconnectBank(); // Also disconnect bank on logout
     logout();
-  }, [resetStorage, logout]);
+  }, [resetStorage, disconnectBank, logout]);
 
   // Handle enabling debug mode
   const handleEnableDebug = useCallback(() => {
@@ -327,26 +343,32 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-100 flex justify-center">
       <div className="bg-white shadow-lg rounded-lg p-4 sm:p-8 max-w-2xl w-full mt-4 sm:mt-8">
-        {/* Header with user info and logout */}
-        <Header user={user} onLogout={handleLogout} />
-
-        <h1 className="text-3xl font-bold text-gray-900 text-center mb-3">
-          Societal Debt Calculator
-        </h1>
+        {/* Header with user info, bank disconnect and logout */}
+        <Header 
+          user={user} 
+          onLogout={handleLogout} 
+          onDisconnectBank={handleDisconnectBank}
+          isBankConnected={connectionStatus.isConnected}
+        />
 
         {/* Error display */}
         {error && <ErrorAlert message={error} />}
 
-        {/* Real bank connection - always visible when no data */}
-        {!hasData && !connectionStatus.isConnected && (
-          <div className="my-6 p-4 border rounded-lg bg-blue-50 text-center">
-            <h2 className="text-lg font-semibold text-blue-800 mb-2">Connect Your Bank</h2>
-            <p className="text-sm text-blue-700 mb-4">
-              Connect your bank account to analyze your transactions and calculate your societal debt.
-            </p>
-            <PlaidConnectionSection onSuccess={handlePlaidSuccess} />
-          </div>
-        )}
+        {/* Bank Connection Section - Always visible */}
+        <div className="my-6 p-4 border rounded-lg bg-blue-50 text-center">
+          <h2 className="text-lg font-semibold text-blue-800 mb-2">
+            {connectionStatus.isConnected ? "Bank Connection" : "Connect Your Bank"}
+          </h2>
+          <p className="text-sm text-blue-700 mb-4">
+            {connectionStatus.isConnected 
+              ? "You can disconnect and reconnect to a different bank account."
+              : "Connect your bank account to analyze your transactions and calculate your societal debt."}
+          </p>
+          <PlaidConnectionSection 
+            onSuccess={handlePlaidSuccess}
+            isConnected={connectionStatus.isConnected}
+          />
+        </div>
 
         {/* Loading states */}
         {isLoading && (

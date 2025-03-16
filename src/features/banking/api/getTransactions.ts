@@ -24,10 +24,10 @@ export async function getTransactionsHandler(req: NextRequest) {
     try {
       const transactions = await getTransactions(access_token);
       
-      if (config.plaid.useSampleData) {
-        console.log("📝 Error in sandbox mode, using sample data...");
-        return NextResponse.json(getSampleTransactions());
-      }
+      // if (config.plaid.isSandbox || config.plaid.useSampleData) {
+      //   console.log("📝 Error in sandbox mode, using sample data...");
+      //   return NextResponse.json(getSampleTransactions());
+      // }
       
       return NextResponse.json(transactions);
     } catch (error) {
@@ -36,11 +36,11 @@ export async function getTransactionsHandler(req: NextRequest) {
   } catch (error) {
     console.error("💥 Error in transactions route:", error);
     
-    // For sandbox mode, return sample data instead of error
-    if (config.plaid.isSandbox || config.plaid.useSampleData) {
-      console.log("📝 Error in sandbox mode, using sample data...");
-      return NextResponse.json(getSampleTransactions());
-    }
+    // // For sandbox mode, return sample data instead of error
+    // if (config.plaid.isSandbox || config.plaid.useSampleData) {
+    //   console.log("📝 Error in sandbox mode, using sample data...");
+    //   return NextResponse.json(getSampleTransactions());
+    // }
     
     return NextResponse.json(
       { 
