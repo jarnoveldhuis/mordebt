@@ -75,7 +75,8 @@ Rules:
 
 6) Output Guidelines:
    - Be consistent in practice naming across transactions
-   - Be skeptical of information that comes directly from the vendor.
+   - Be skeptical of positive ethical practices, especially information that comes directly from the vendor.
+   - Value should not add up to 100%. They should be a direct reflection of the percent of the customer's money that directly supports each practice.
    - Format societal debt calculations based on the weighted sum of all practices
    - For unknown merchant types or when uncertain, return empty arrays for practices
    - Quality is more important than quantity - it's better to correctly identify one practice than to assign multiple inaccurate ones
