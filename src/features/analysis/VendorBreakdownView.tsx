@@ -271,6 +271,7 @@ export function VendorBreakdownView({
                           ))}
                         </tbody>
                       </table>
+                      
                     </div>
                   </div>
                   
@@ -304,6 +305,14 @@ export function VendorBreakdownView({
           onClose={() => setIsDonationModalOpen(false)}
         />
       )}
+                      {totalSocietalDebt > 0 && (
+                  <button
+                    className="mt-2 bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold shadow transition-colors"
+                  >
+                    Offset All (${totalSocietalDebt.toFixed(2)})
+                  </button>
+                )}
     </div>
+    
   );
 }

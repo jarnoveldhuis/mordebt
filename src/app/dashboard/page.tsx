@@ -61,7 +61,7 @@ export default function Dashboard() {
     transactions: bankTransactions,
     connectBank,
     disconnectBank
-  } = useBankConnection();
+  } = useBankConnection(user);
 
   // Transaction analysis
   const {
