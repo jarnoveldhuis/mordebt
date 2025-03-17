@@ -1,534 +1,496 @@
-// src/app/dashboard/page.tsx
 "use client";
 
+import { useEffect, useCallback, useState, useMemo } from "react";
 import { useAuth } from "@/shared/hooks/useAuth";
+import { LoadingSpinner } from "@/shared/components/ui/LoadingSpinner";
+import { ErrorAlert } from "@/shared/components/ui/ErrorAlert";
 import { useTransactionStorage } from "@/features/analysis/useTransactionStorage";
 import { useTransactionAnalysis } from "@/features/analysis/useTransactionAnalysis";
-import { useBankConnection } from "@/features/banking/useBankConnection";
-import MainDashboard from "@/components/dashboard/main-dashboard";
+import { Transaction } from "@/shared/types/transactions";
+import { config } from "@/config";
+import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
+import { DashboardContent } from "@/components/dashboard/DashboardContent";
+import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
+import { PlaidConnectionSection } from "@/features/banking/PlaidConnectionSection";
+import { TransactionList } from "@/features/analysis/TransactionList";
+import { ConsolidatedImpactView } from "@/features/analysis/ConsolidatedImpactView";
+import { CategoryExperimentView } from "@/features/analysis/CategoryExperimentView";
+import { PracticeDebtTable } from "@/features/analysis/PracticeDebtTable";
+import { deleteAllUserTransactions, userHasData, loadUserTransactions } from "@/features/analysis/directFirebaseLoader";
 
-export default function DashboardPage() {
-  // Your existing hooks
-  const { user } = useAuth();
-  const { connectionStatus, connectBank, disconnectBank } = useBankConnection(user);
+// Import the sample data hook
+import { useSampleData } from '@/features/debug/useSampleData';
 
-  const { analyzedData, analysisStatus } = useTransactionAnalysis();
-  const { saveTransactions } = useTransactionStorage(user);
+// Determine if we're in development/sandbox mode
+const isSandboxMode = process.env.NODE_ENV === 'development' || config.plaid.isSandbox;
 
-  return (
-    <MainDashboard
-      user={user}
-      transactions={analyzedData?.transactions || []}
-      totalSocietalDebt={analyzedData?.totalSocietalDebt || null}
-      isLoading={analysisStatus.status === 'loading' || connectionStatus.isLoading}
-      error={analysisStatus.error || connectionStatus.error}
-      isBankConnected={connectionStatus.isConnected}
-      onConnectBank={connectBank}
-      onDisconnectBank={disconnectBank}
-      onSaveTransactions={saveTransactions}
-    />
-  );
+// Helper function to get color class for debt values
+function getColorClass(value: number): string {
+  if (value < 0) return "text-green-600";
+  if (value === 0) return "text-blue-600";
+  if (value <= 10) return "text-yellow-600";
+  if (value <= 20) return "text-orange-600";
+  if (value <= 50) return "text-red-600";
+  return "text-red-700";
 }
 
-
-
-
-
-
-
-
-// // src/app/dashboard/page.tsx
-// "use client";
-
-// import { useEffect, useCallback, useRef, useState } from "react";
-// import { useAuth } from "@/shared/hooks/useAuth";
-// import { Header } from "@/shared/components/Header";
-// import { LoadingSpinner } from "@/shared/components/ui/LoadingSpinner";
-// import { ErrorAlert } from "@/shared/components/ui/ErrorAlert";
-// import { TabView } from "@/features/analysis/TabView";
-// import { useTransactionStorage } from "@/features/analysis/useTransactionStorage";
-// import { useTransactionAnalysis } from "@/features/analysis/useTransactionAnalysis";
-// import { useBankConnection } from "@/features/banking/useBankConnection";
-// import { FirebaseVerifier } from "@/features/debug/FirebaseVerifier";
-// import { SandboxTestingPanel } from "@/features/debug/SandboxTestingPanel";
-// import { loadUserTransactions, userHasData, deleteAllUserTransactions } from "@/features/analysis/directFirebaseLoader";
-// import { Transaction } from "@/shared/types/transactions";
-// import PlaidLink from "@/features/banking/PlaidLink";
-// import { config } from "@/config";
-
-// // Determine if we're in development/sandbox mode
-// const isSandboxMode = process.env.NODE_ENV === 'development' || config.plaid.isSandbox;
-
-// // Helper function to get color class for debt values
-// function getColorClass(value: number): string {
-//   if (value < 0) return "text-green-500";
-//   if (value === 0) return "text-blue-500";
-//   if (value <= 10) return "text-yellow-500";
-//   if (value <= 20) return "text-orange-500";
-//   if (value <= 50) return "text-red-500";
-//   return "text-red-700";
-// }
-
-// export default function Dashboard() {
-//   // Track previous user and component state
-//   const previousUserIdRef = useRef<string | null>(null);
-//   const isLoadingDirectRef = useRef(false);
-//   const [showDebugPanel, setShowDebugPanel] = useState(false);
+export default function Dashboard() {
+  // Track direct Firebase loading state
+  const [directLoadAttempted, setDirectLoadAttempted] = useState(false);
+  const [isLoadingDirect, setIsLoadingDirect] = useState(false);
+  const [debugConnectionStatus, setDebugConnectionStatus] = useState(false);
+  const [activeView, setActiveView] = useState<string>("transactions");
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
   
-//   // Track direct Firebase loading state
-//   const [directLoadAttempted, setDirectLoadAttempted] = useState(false);
+  // Authentication state
+  const { user, loading: authLoading, logout } = useAuth();
+
+  // Firebase storage for analyzed transactions
+  const {
+    savedTransactions,
+    totalSocietalDebt,
+    isLoading: storageLoading,
+    error: storageError,
+    saveTransactions,
+    loadLatestTransactions,
+    hasSavedData,
+    resetStorage
+  } = useTransactionStorage(user);
+
+  // Transaction analysis
+  const {
+    analyzedData,
+    analysisStatus,
+    analyzeTransactions
+  } = useTransactionAnalysis();
+
+  // Track connection status independent of actual Plaid connection
+  const [connectionStatus, setConnectionStatus] = useState({
+    isConnected: false,
+    isLoading: false,
+    error: null as string | null
+  });
+
+  // Consolidate transactions for display
+  const displayTransactions = analyzedData?.transactions || savedTransactions || [];
   
-//   // Authentication state
-//   const { user, loading: authLoading, logout } = useAuth();
+  // Calculate practice donations - this would be used for the PracticeDebtTable
+  const practiceDonations = useMemo(() => {
+    if (!displayTransactions || displayTransactions.length === 0) {
+      return {};
+    }
 
-//   // Firebase storage for analyzed transactions
-//   const {
-//     savedTransactions,
-//     isLoading: storageLoading,
-//     error: storageError,
-//     saveTransactions,
-//     loadLatestTransactions,
-//     hasSavedData,
-//     resetStorage,
-//     enableDebug,
-//     disableDebug
-//   } = useTransactionStorage(user);
+    const donations: Record<string, { charity: { name: string; url: string } | null; amount: number }> = {};
 
-//   // Bank connection and transactions
-//   const { 
-//     connectionStatus,
-//     transactions: bankTransactions,
-//     connectBank,
-//     disconnectBank
-//   } = useBankConnection(user);
-
-//   // Transaction analysis
-//   const {
-//     analyzedData,
-//     analysisStatus,
-//     analyzeTransactions
-//   } = useTransactionAnalysis();
-
-//   // State for debug mode fake connection status
-//   const [debugConnectionStatus, setDebugConnectionStatus] = useState(false);
-  
-//   // Merge real and debug connection statuses
-//   const effectiveConnectionStatus = {
-//     ...connectionStatus,
-//     isConnected: connectionStatus.isConnected || debugConnectionStatus
-//   };
-  
-//   // Auto-enable Firebase debugging in development
-//   useEffect(() => {
-//     if (process.env.NODE_ENV === 'development') {
-//       enableDebug();
-//     }
-//   }, [enableDebug]);
-
-//   // Detect user changes using a ref instead of state
-//   useEffect(() => {
-//     const currentUserId = user?.uid || null;
-//     const previousUserId = previousUserIdRef.current;
-    
-//     // Only run on real changes, not initial render
-//     if (previousUserId !== undefined && currentUserId !== previousUserId) {
-//       console.log(`User change detected: ${previousUserId} -> ${currentUserId}`);
-      
-//       // Log out transition
-//       if (!currentUserId && previousUserId) {
-//         console.log("User logged out");
-//         resetStorage();
-//         disconnectBank(); // Also disconnect bank account on logout
-//         // The useAuth hook will handle redirection
-//       }
-      
-//       // Log in transition
-//       if (currentUserId && !previousUserId) {
-//         console.log("User logged in - will load data shortly");
-//         setDirectLoadAttempted(false); // Reset direct load flag on login
-//       }
-      
-//       // User switch (different user logged in)
-//       if (currentUserId && previousUserId && currentUserId !== previousUserId) {
-//         console.log("Different user logged in");
-//         resetStorage();
-//         disconnectBank(); // Also disconnect bank account on user switch
-//         setDirectLoadAttempted(false); // Reset direct load flag on user switch
-//       }
-//     }
-    
-//     // Update the previous user ref
-//     previousUserIdRef.current = currentUserId;
-//   }, [user, resetStorage, disconnectBank]);
-
-//   // Try to load data directly from Firebase if hook-based loading fails
-//   const loadDirectFromFirebase = useCallback(async () => {
-//     if (!user || isLoadingDirectRef.current || directLoadAttempted) return;
-    
-//     console.log(`🚨 Attempting direct Firebase load for user: ${user.uid}`);
-//     isLoadingDirectRef.current = true;
-//     setDirectLoadAttempted(true);
-    
-//     try {
-//       // First check if the user has any data at all
-//       const hasData = await userHasData(user.uid);
-      
-//       if (!hasData) {
-//         console.log("🚨 Direct Firebase check: User has no data stored");
-//         isLoadingDirectRef.current = false;
-//         return;
-//       }
-      
-//       // Load the data directly
-//       const result = await loadUserTransactions(user.uid);
-      
-//       if (result.error) {
-//         console.error("🚨 Direct Firebase load error:", result.error);
-//         isLoadingDirectRef.current = false;
-//         return;
-//       }
-      
-//       if (!result.transactions || result.transactions.length === 0) {
-//         console.log("🚨 Direct Firebase load: No transactions found");
-//         isLoadingDirectRef.current = false;
-//         return;
-//       }
-      
-//       console.log(`🚨 Direct Firebase load: Found ${result.transactions.length} transactions`);
-      
-//       // Mark all transactions as analyzed
-//       const markedTransactions = result.transactions.map(tx => ({
-//         ...tx,
-//         analyzed: true
-//       }));
-      
-//       // Analyze the directly loaded transactions
-//       analyzeTransactions(markedTransactions);
-      
-//       isLoadingDirectRef.current = false;
-//     } catch (error) {
-//       console.error("🚨 Error in direct Firebase loading:", error);
-//       isLoadingDirectRef.current = false;
-//     }
-//   }, [user, analyzeTransactions, directLoadAttempted]);
-
-//   // Effect to try direct loading if hook loading fails
-//   useEffect(() => {
-//     if (user && 
-//         !savedTransactions && 
-//         !storageLoading && 
-//         !directLoadAttempted) {
-//       // If normal loading has completed but found no data, try direct load
-//       console.log("🚀 Normal loading finished with no data, trying direct load");
-//       loadDirectFromFirebase();
-//     }
-//   }, [user, savedTransactions, storageLoading, loadDirectFromFirebase, directLoadAttempted]);
-
-//   // Handle successful data load from Firebase (via hook or direct)
-//   useEffect(() => {
-//     if (savedTransactions && savedTransactions.length > 0 && user) {
-//       console.log(`📊 Using ${savedTransactions.length} saved transactions from hook`);
-      
-//       // Mark all transactions as analyzed
-//       const markedTransactions = savedTransactions.map(tx => ({
-//         ...tx,
-//         analyzed: true
-//       }));
-      
-//       analyzeTransactions(markedTransactions);
-//     }
-//   }, [savedTransactions, analyzeTransactions, user]);
-
-//   // Analyze new bank transactions when they arrive
-//   useEffect(() => {
-//     if (bankTransactions.length > 0 && 
-//         !analyzedData && 
-//         analysisStatus.status === 'idle' &&
-//         user) {
-//       console.log(`🧮 Analyzing ${bankTransactions.length} new bank transactions`);
-//       analyzeTransactions(bankTransactions);
-//     }
-//   }, [bankTransactions, analyzedData, analysisStatus, analyzeTransactions, user]);
-
-//   // Save analyzed data to Firebase
-//   useEffect(() => {
-//     // Only save if we have user, valid data, and haven't already saved this session
-//     if (user && 
-//         analyzedData && 
-//         analyzedData.transactions.length > 0 && 
-//         analysisStatus.status === 'success' &&
-//         !hasSavedData) {
-      
-//       // Add a small delay to avoid race conditions with component unmounting
-//       const saveTimeout = setTimeout(() => {
-//         console.log(`💾 Saving ${analyzedData.transactions.length} analyzed transactions to Firebase`);
-//         saveTransactions(
-//           analyzedData.transactions, 
-//           analyzedData.totalSocietalDebt
-//         ).catch(err => console.error("Failed to save to Firebase:", err));
-//       }, 500);
-      
-//       return () => clearTimeout(saveTimeout);
-//     }
-//   }, [user, analyzedData, analysisStatus, saveTransactions, hasSavedData]);
-
-//   // Handle Plaid success callback
-//   const handlePlaidSuccess = useCallback((publicToken: string) => {
-//     console.log("🏦 Bank Connection Successful");
-//     connectBank(publicToken);
-//   }, [connectBank]);
-
-//   // Handle loading sample data from debug panel
-//   const handleLoadSampleData = useCallback((sampleTransactions: Transaction[]) => {
-//     if (!sampleTransactions || sampleTransactions.length === 0) {
-//       console.error("No sample transactions provided");
-//       return;
-//     }
-    
-//     console.log(`Loading ${sampleTransactions.length} sample transactions directly`);
-    
-//     // Skip the bank connection process and go straight to analysis
-//     analyzeTransactions(sampleTransactions);
-//   }, [analyzeTransactions]);
-
-//   // Reset all user transactions
-//   const handleResetTransactions = useCallback(async () => {
-//     if (!user) return;
-    
-//     try {
-//       // First reset the local state
-//       resetStorage();
-      
-//       // Then delete from Firebase
-//       console.log(`Attempting to delete all transactions for user: ${user.uid}`);
-//       await deleteAllUserTransactions(user.uid);
-      
-//       console.log("🗑️ All user transactions deleted");
-//       return Promise.resolve();
-//     } catch (error) {
-//       console.error("Failed to reset transactions:", error);
-//       throw error;
-//     }
-//   }, [user, resetStorage]);
-
-//   // Handle logout with cleanup
-//   const handleLogout = useCallback(() => {
-//     console.log("User initiated logout");
-//     resetStorage();
-//     disconnectBank(); // Also disconnect bank on logout
-//     logout();
-//   }, [resetStorage, disconnectBank, logout]);
-  
-//   // Handle disconnecting bank with transaction cleanup
-//   const handleDisconnectBank = useCallback(() => {
-//     // Disconnect bank
-//     disconnectBank();
-    
-//     // Also clear analyzed data
-//     resetStorage();
-//   }, [disconnectBank, resetStorage]);
-
-//   // Force direct load from Firebase
-//   const handleForceDirectLoad = useCallback(() => {
-//     if (user) {
-//       console.log("🔄 Manual direct load triggered");
-//       setDirectLoadAttempted(false); // Reset flag to allow reload
-//       loadDirectFromFirebase();
-//     }
-//   }, [user, loadDirectFromFirebase]);
-
-//   // Handle loading states
-//   if (authLoading) {
-//     return (
-//       <div className="text-center mt-10">
-//         <LoadingSpinner message="Checking authentication..." />
-//       </div>
-//     );
-//   }
-
-//   // Redirect if no user is found (handled by useAuth hook)
-//   if (!user) {
-//     return <div className="text-center mt-10">Redirecting to login...</div>;
-//   }
-
-//   // Determine if we have data to show
-//   const hasData = Boolean(analyzedData && analyzedData.transactions.length > 0);
-//   const isLoading = connectionStatus.isLoading || 
-//                     analysisStatus.status === 'loading' || 
-//                     storageLoading || 
-//                     isLoadingDirectRef.current;
-//   const error = connectionStatus.error || analysisStatus.error || storageError;
-  
-//   // Main render
-//   return (
-//     <div className="min-h-screen bg-gray-100 flex justify-center">
-//       <div className="bg-white shadow-lg rounded-lg p-4 sm:p-8 max-w-2xl w-full mt-4 sm:mt-8">
-//         {/* Header with user dropdown menu for account actions */}
-//         <Header 
-//           user={user} 
-//           onLogout={handleLogout} 
-//           onDisconnectBank={handleDisconnectBank}
-//           isBankConnected={effectiveConnectionStatus.isConnected}
-//         />
-
-//         {/* Error display */}
-//         {error && <ErrorAlert message={error} />}
-
-//         {/* Bank Connection Section - Only shown when not connected */}
-//         {!effectiveConnectionStatus.isConnected && (
-//           <div className="my-6 p-4 border rounded-lg bg-blue-50 text-center">
-//             <h2 className="text-lg font-semibold text-blue-800 mb-2">
-//               Connect Your Bank
-//             </h2>
-//             <p className="text-sm text-blue-700 mb-4">
-//               Connect your bank account to analyze your transactions and calculate your societal debt.
-//             </p>
-//             <PlaidLink onSuccess={handlePlaidSuccess} />
-//           </div>
-//         )}
-
-//         {/* Main content area with tabs or loading indicator */}
-//         <div className="relative">
-//           {/* Show tab view if we have data (regardless of connection status) */}
-//           {hasData && analyzedData && (
-//             <TabView
-//               transactions={analyzedData.transactions}
-//               totalSocietalDebt={analyzedData.totalSocietalDebt}
-//               getColorClass={getColorClass}
-//               // Set initial active tab to 'impact' (the summary view)
-//               initialActiveTab="impact"
-//             />
-//           )}
-          
-//           {/* No data message when no transactions are available and not loading */}
-//           {!hasData && !isLoading && (
-//             <div className="bg-white rounded-lg shadow-md p-6 text-center">
-//               <h2 className="text-xl font-semibold text-gray-800 mb-2">No Transactions Found</h2>
-//               <p className="text-gray-600 mb-4">
-//                 {effectiveConnectionStatus.isConnected 
-//                   ? "We couldn't find any transactions in your connected account." 
-//                   : "Connect your bank or use the debug tools to load transactions."}
-//               </p>
-//               {effectiveConnectionStatus.isConnected && (
-//                 <button
-//                   onClick={() => disconnectBank()}
-//                   className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded"
-//                 >
-//                   Try Connecting Again
-//                 </button>
-//               )}
-//             </div>
-//           )}
-          
-//           {/* Loading spinner - positioned within the content area */}
-//           {isLoading && (
-//             <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-80 z-10 rounded-lg">
-//               <LoadingSpinner 
-//                 message={
-//                   connectionStatus.isLoading 
-//                     ? "Loading transactions..." 
-//                     : isLoadingDirectRef.current
-//                       ? "Loading data directly from Firebase..."
-//                       : "Analyzing your transactions..."
-//                 } 
-//               />
-//             </div>
-//           )}
-//         </div>
+    displayTransactions.forEach(tx => {
+      // Process unethical practices
+      (tx.unethicalPractices || []).forEach(practice => {
+        if (!donations[practice]) {
+          donations[practice] = {
+            charity: tx.charities?.[practice] || null,
+            amount: 0
+          };
+        }
         
-//         {/* Debug panel toggle - only show in development/sandbox mode */}
-//         {isSandboxMode && (
-//           <div className="mt-4 text-center">
-//             <button 
-//               onClick={() => setShowDebugPanel(!showDebugPanel)}
-//               className="text-xs text-blue-600 underline"
-//             >
-//               {showDebugPanel ? "Hide Debug Panel" : "Show Debug Panel"}
-//             </button>
-//           </div>
-//         )}
-        
-//         {/* Debug panel with all debugging tools - only show in development/sandbox mode */}
-//         {isSandboxMode && showDebugPanel && (
-//           <div className="mt-4 p-4 border border-gray-300 rounded bg-gray-50">
-//             <h3 className="font-bold text-gray-700 mb-2">Debug Tools</h3>
-            
-//             {/* Firebase Verifier - only in debug panel */}
-//             <FirebaseVerifier user={user} />
-            
-//             {/* Data loading tools */}
-//             <div className="mt-4">
-//               <h4 className="font-semibold text-sm text-gray-700 mb-2">Data Operations</h4>
-//               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-//                 <button 
-//                   onClick={loadLatestTransactions}
-//                   className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm"
-//                 >
-//                   Load via Hook
-//                 </button>
-//                 <button 
-//                   onClick={handleForceDirectLoad}
-//                   className="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded text-sm"
-//                 >
-//                   Load Directly
-//                 </button>
-//               </div>
-//             </div>
-            
-//             {/* Firebase debug options */}
-//             <div className="mt-3">
-//               <h4 className="font-semibold text-sm text-gray-700 mb-2">Firebase Debug</h4>
-//               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-//                 <button 
-//                   onClick={enableDebug}
-//                   className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm"
-//                 >
-//                   Enable Firebase Debug
-//                 </button>
-//                 <button 
-//                   onClick={disableDebug}
-//                   className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm"
-//                 >
-//                   Disable Firebase Debug
-//                 </button>
-//               </div>
-//             </div>
-            
-//             {/* Sandbox testing tools - only visible in development/sandbox mode */}
-//             <SandboxTestingPanel 
-//               user={user}
-//               onLoadSampleData={handleLoadSampleData}
-//               onClearData={handleResetTransactions}
-//               isLoading={isLoading}
-//               setFakeConnectionStatus={setDebugConnectionStatus}
-//             />
+        // Add the debt amount for this practice
+        const weight = tx.practiceWeights?.[practice] || 0;
+        donations[practice].amount += tx.amount * (weight / 100);
+      });
 
-//             {/* Status information */}
-//             <div className="mt-3 p-2 border border-gray-200 rounded bg-white">
-//               <h4 className="font-semibold text-sm text-gray-700 mb-1">Status Information</h4>
-//               <div className="text-xs text-gray-600 grid grid-cols-2 gap-x-2 gap-y-1">
-//                 <div>User ID:</div>
-//                 <div className="font-mono">{user.uid}</div>
-                
-//                 <div>Email:</div>
-//                 <div>{user.email}</div>
-                
-//                 <div>Has Saved Data:</div>
-//                 <div>{hasSavedData ? 'Yes' : 'No'}</div>
-                
-//                 <div>Connection Status:</div>
-//                 <div>{connectionStatus.isConnected ? 'Connected' : 'Not Connected'}</div>
-                
-//                 <div>Analysis Status:</div>
-//                 <div>{analysisStatus.status}</div>
-                
-//                 <div>Transactions Count:</div>
-//                 <div>{analyzedData?.transactions.length || 0}</div>
-//               </div>
-//             </div>
-//           </div>
-//         )}
-//       </div>
-//     </div>
-//   );
-// }
+      // Process ethical practices (negative debt)
+      (tx.ethicalPractices || []).forEach(practice => {
+        if (!donations[practice]) {
+          donations[practice] = {
+            charity: tx.charities?.[practice] || null,
+            amount: 0
+          };
+        }
+        
+        // Subtract the credit amount for this practice
+        const weight = tx.practiceWeights?.[practice] || 0;
+        donations[practice].amount -= tx.amount * (weight / 100);
+      });
+    });
+
+    return donations;
+  }, [displayTransactions]);
+
+  // Try to load data directly from Firebase if hook-based loading fails
+  const loadDirectFromFirebase = useCallback(async () => {
+    if (!user || isLoadingDirect || directLoadAttempted) return;
+    
+    console.log(`🚨 Attempting direct Firebase load for user: ${user.uid}`);
+    setIsLoadingDirect(true);
+    setDirectLoadAttempted(true);
+    
+    try {
+      // First check if the user has any data at all
+      const hasData = await userHasData(user.uid);
+      
+      if (!hasData) {
+        console.log("🚨 Direct Firebase check: User has no data stored");
+        setIsLoadingDirect(false);
+        return;
+      }
+      
+      // Load the data directly
+      const result = await loadUserTransactions(user.uid);
+      
+      if (result.error) {
+        console.error("🚨 Direct Firebase load error:", result.error);
+        setIsLoadingDirect(false);
+        return;
+      }
+      
+      if (!result.transactions || result.transactions.length === 0) {
+        console.log("🚨 Direct Firebase load: No transactions found");
+        setIsLoadingDirect(false);
+        return;
+      }
+      
+      console.log(`🚨 Direct Firebase load: Found ${result.transactions.length} transactions`);
+      
+      // Mark all transactions as analyzed
+      const markedTransactions = result.transactions.map(tx => ({
+        ...tx,
+        analyzed: true
+      }));
+      
+      // Analyze the directly loaded transactions
+      analyzeTransactions(markedTransactions);
+      
+      setIsLoadingDirect(false);
+    } catch (error) {
+      console.error("🚨 Error in direct Firebase loading:", error);
+      setIsLoadingDirect(false);
+    }
+  }, [user, analyzeTransactions, directLoadAttempted, isLoadingDirect]);
+
+  // Effect to try direct loading if hook loading fails
+  useEffect(() => {
+    if (user && 
+        !savedTransactions && 
+        !storageLoading && 
+        !directLoadAttempted) {
+      // If normal loading has completed but found no data, try direct load
+      console.log("🚀 Normal loading finished with no data, trying direct load");
+      loadDirectFromFirebase();
+    }
+  }, [user, savedTransactions, storageLoading, loadDirectFromFirebase, directLoadAttempted]);
+
+  // Handle successful data load from Firebase
+  useEffect(() => {
+    if (savedTransactions && savedTransactions.length > 0 && user) {
+      console.log(`📊 Using ${savedTransactions.length} saved transactions from hook`);
+      
+      // Mark all transactions as analyzed
+      const markedTransactions = savedTransactions.map(tx => ({
+        ...tx,
+        analyzed: true
+      }));
+      
+      analyzeTransactions(markedTransactions);
+    }
+  }, [savedTransactions, analyzeTransactions, user]);
+
+  // Save analyzed data to Firebase
+  useEffect(() => {
+    // Only save if we have user, valid data, and haven't already saved this session
+    if (user && 
+        analyzedData && 
+        analyzedData.transactions.length > 0 && 
+        analysisStatus.status === 'success' &&
+        !hasSavedData) {
+      
+      // Add a small delay to avoid race conditions with component unmounting
+      const saveTimeout = setTimeout(() => {
+        console.log(`💾 Saving ${analyzedData.transactions.length} analyzed transactions to Firebase`);
+        saveTransactions(
+          analyzedData.transactions, 
+          analyzedData.totalSocietalDebt
+        ).catch(err => console.error("Failed to save to Firebase:", err));
+      }, 500);
+      
+      return () => clearTimeout(saveTimeout);
+    }
+  }, [user, analyzedData, analysisStatus, saveTransactions, hasSavedData]);
+
+  // Get the sample data generation functions
+  const { generateSampleTransactions, calculateSampleDebt } = useSampleData();
+
+  // Handle loading sample data from debug panel
+  const handleLoadSampleData = useCallback((sampleTransactions?: Transaction[]) => {
+    // If no transactions are provided, generate them
+    const transactions = sampleTransactions || generateSampleTransactions();
+    
+    if (!transactions || transactions.length === 0) {
+      console.error("No sample transactions available");
+      return;
+    }
+    
+    console.log(`Loading ${transactions.length} sample transactions directly`);
+    
+    // Skip the bank connection process and go straight to analysis
+    analyzeTransactions(transactions);
+    
+    // Update connection status
+    setConnectionStatus({
+      isConnected: true,
+      isLoading: false,
+      error: null
+    });
+  }, [analyzeTransactions, generateSampleTransactions]);
+
+  // Handle Plaid success callback
+  const handlePlaidSuccess = useCallback((publicToken: string | null) => {
+    // If no token is provided, we're using sample data
+    if (!publicToken) {
+      console.log("🧪 Using sample data instead of Plaid");
+      handleLoadSampleData();
+      return;
+    }
+    
+    console.log("🏦 Bank Connection Successful");
+    setConnectionStatus({
+      isConnected: true,
+      isLoading: false,
+      error: null
+    });
+    
+    // In a real implementation, this would exchange the token and fetch transactions
+    // For now, we'll simulate success
+    setDebugConnectionStatus(true);
+    
+    // A real implementation would have code like:
+    // 1. Exchange public token for access token
+    // 2. Use access token to fetch transactions
+    // 3. Process and analyze transactions
+    
+    // For demo purposes, we'll just load sample data
+    if (isSandboxMode) {
+      handleLoadSampleData();
+    }
+  }, [handleLoadSampleData]);
+
+  // Reset all user transactions
+  const handleResetTransactions = useCallback(async () => {
+    if (!user) return Promise.resolve();
+    
+    try {
+      // First reset the local state
+      resetStorage();
+      
+      // Then delete from Firebase
+      console.log(`Attempting to delete all transactions for user: ${user.uid}`);
+      await deleteAllUserTransactions(user.uid);
+      
+      console.log("🗑️ All user transactions deleted");
+      return Promise.resolve();
+    } catch (error) {
+      console.error("Failed to reset transactions:", error);
+      throw error;
+    }
+  }, [user, resetStorage]);
+
+  // Handle disconnecting bank
+  const handleDisconnectBank = useCallback(() => {
+    setConnectionStatus({
+      isConnected: false,
+      isLoading: false,
+      error: null
+    });
+    
+    setDebugConnectionStatus(false);
+    
+    // Also clear analyzed data if needed
+    resetStorage();
+  }, [resetStorage]);
+
+  // Determine if we have data to show
+  const hasData = Boolean(analyzedData && analyzedData.transactions.length > 0);
+  const isLoading = connectionStatus.isLoading || 
+                    analysisStatus.status === 'loading' || 
+                    storageLoading || 
+                    isLoadingDirect;
+  const error = connectionStatus.error || analysisStatus.error || storageError;
+  const effectiveConnectionStatus = connectionStatus.isConnected || debugConnectionStatus;
+
+  // Handle loading states
+  if (authLoading) {
+    return (
+      <div className="text-center mt-10">
+        <LoadingSpinner message="Checking authentication..." />
+      </div>
+    );
+  }
+
+  // Redirect if no user is found (handled by useAuth hook)
+  if (!user) {
+    return <div className="text-center mt-10">Redirecting to login...</div>;
+  }
+
+  // Get the currently active view component
+  const renderActiveView = () => {
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <LoadingSpinner message={
+            connectionStatus.isLoading 
+              ? "Loading transactions..." 
+              : isLoadingDirect
+                ? "Loading data directly from Firebase..."
+                : "Analyzing your transactions..."
+          } />
+        </div>
+      );
+    }
+
+    if (!hasData) {
+      return (
+        <div className="flex flex-col items-center justify-center h-64 p-6">
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">No Transactions Found</h2>
+          <p className="text-gray-600 mb-4 text-center">
+            {effectiveConnectionStatus 
+              ? "We couldn't find any transactions in your connected account." 
+              : "Connect your bank or use the debug tools to load transactions."}
+          </p>
+          {effectiveConnectionStatus && (
+            <button
+              onClick={handleDisconnectBank}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded"
+            >
+              Try Connecting Again
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    // Render appropriate view based on active tab
+    switch (activeView) {
+      case "impact":
+        return (
+          <ConsolidatedImpactView 
+            transactions={displayTransactions}
+            totalSocietalDebt={totalSocietalDebt || analyzedData?.totalSocietalDebt || 0}
+          />
+        );
+      case "categories":
+        return (
+          <CategoryExperimentView 
+            transactions={displayTransactions}
+            totalSocietalDebt={totalSocietalDebt || analyzedData?.totalSocietalDebt || 0}
+          />
+        );
+      case "practices":
+        return (
+          <PracticeDebtTable 
+            practiceDonations={practiceDonations}
+            transactions={displayTransactions}
+            totalSocietalDebt={totalSocietalDebt || analyzedData?.totalSocietalDebt || 0}
+          />
+        );
+      case "transactions":
+      default:
+        return (
+          <TransactionList 
+            transactions={displayTransactions}
+            getColorClass={getColorClass}
+          />
+        );
+    }
+  };
+
+  // Render the dashboard
+  return (
+    <DashboardLayout 
+      user={user}
+      onLogout={logout}
+      onDisconnectBank={handleDisconnectBank}
+      isBankConnected={effectiveConnectionStatus}
+    >
+      {/* Error display */}
+      {error && <ErrorAlert message={error} />}
+
+      {/* Main content area */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Sidebar */}
+        <DashboardSidebar 
+          user={user}
+          impactScore={75}
+          activeView={activeView}
+          onViewChange={setActiveView}
+          totalSocietalDebt={totalSocietalDebt || analyzedData?.totalSocietalDebt || 0}
+          offsetsThisMonth={37.5}
+          hasTransactions={hasData}
+        />
+
+        {/* Main content */}
+        <div className="lg:col-span-3 space-y-6">
+          {/* Bank Connection Section - Only shown when not connected */}
+          {!effectiveConnectionStatus && (
+            <div className="bg-white rounded-xl shadow-md p-6">
+              <h2 className="text-lg font-semibold text-blue-800 mb-2">
+                Connect Your Bank
+              </h2>
+              <p className="text-sm text-blue-700 mb-4">
+                Connect your bank account to analyze your transactions and calculate your societal debt.
+              </p>
+              <PlaidConnectionSection 
+                onSuccess={handlePlaidSuccess} 
+                isConnected={effectiveConnectionStatus}
+              />
+            </div>
+          )}
+
+          {/* Main view content */}
+          <div className="bg-white rounded-xl shadow-md overflow-hidden">
+            {renderActiveView()}
+          </div>
+          
+          {/* Debug panel toggle - only in dev/sandbox mode */}
+          {isSandboxMode && (
+            <div className="mt-4 text-center">
+              <button 
+                onClick={() => setShowDebugPanel(!showDebugPanel)}
+                className="text-xs text-blue-600 underline"
+              >
+                {showDebugPanel ? "Hide Debug Panel" : "Show Debug Panel"}
+              </button>
+              
+              {/* Debug panel content */}
+              {showDebugPanel && (
+                <div className="mt-4 p-4 border border-gray-300 rounded bg-gray-50">
+                  <h3 className="font-bold text-gray-700 mb-2">Sandbox Testing Tools</h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                    <button
+                      onClick={() => handleLoadSampleData()}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded font-medium text-sm"
+                    >
+                      Load Sample Data
+                    </button>
+                    
+                    <button
+                      onClick={handleResetTransactions}
+                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded font-medium text-sm"
+                    >
+                      Reset All Data
+                    </button>
+                  </div>
+                  
+                  <div className="mt-3 text-xs text-gray-600">
+                    <div>User ID: {user?.uid || 'Not logged in'}</div>
+                    <p className="mt-1 text-yellow-700">
+                      <strong>Note:</strong> These options are only visible in development/sandbox mode.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </DashboardLayout>
+  );
+}
