@@ -4,7 +4,7 @@
 "use client";
 
 
-const isSandboxMode = process.env.NODE_ENV === 'development' || config.plaid.isSandbox;
+// const isSandboxMode = process.env.NODE_ENV === 'development' || config.plaid.isSandbox;
 
 import { useEffect, useCallback, useRef, useState } from "react";
 import { useAuth } from "@/shared/hooks/useAuth";
@@ -33,6 +33,13 @@ function getColorClass(value: number): string {
 }
 
 export default function Dashboard() {
+    // Move the check inside the component
+    const [isSandboxMode, setIsSandboxMode] = useState(false);
+  
+    // Set it after component mounts
+    useEffect(() => {
+      setIsSandboxMode(process.env.NODE_ENV === 'development' || config.plaid.isSandbox);
+    }, []);
   // Track previous user and component state
   const previousUserIdRef = useRef<string | null>(null);
   const isLoadingDirectRef = useRef(false);
