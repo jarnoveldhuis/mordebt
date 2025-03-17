@@ -4,29 +4,39 @@ import { Transaction } from "@/shared/types/transactions";
 import { ConsolidatedImpactView } from "./ConsolidatedImpactView";
 import { TransactionList } from "./TransactionList";
 import { CategoryExperimentView } from "./CategoryExperimentView";
+import { VendorBreakdownView } from "./VendorBreakdownView";
 
 interface TabViewProps {
   transactions: Transaction[];
   totalSocietalDebt: number;
   getColorClass: (value: number) => string;
+  initialActiveTab?: TabType;
 }
 
-type TabType = "impact" | "transactions" | "categories";
+export type TabType = "impact" | "transactions" | "categories" | "vendors";
 
 export function TabView({
   transactions,
   totalSocietalDebt,
   getColorClass,
+  initialActiveTab = "transactions",
 }: TabViewProps) {
-  const [activeTab, setActiveTab] = useState<TabType>("transactions");
+  const [activeTab, setActiveTab] = useState<TabType>(initialActiveTab);
+
+  // Update active tab when initialActiveTab prop changes
+  useEffect(() => {
+    if (initialActiveTab) {
+      setActiveTab(initialActiveTab);
+    }
+  }, [initialActiveTab]);
 
   // Set the initial active tab based on whether analysis is completed
   useEffect(() => {
     if (transactions.length > 0 && totalSocietalDebt !== null) {
-      // If transactions are loaded and analyzed, default to transactions view
-      setActiveTab("transactions");
+      // If transactions are loaded and analyzed, default to impact view
+      setActiveTab(initialActiveTab);
     }
-  }, [transactions.length, totalSocietalDebt]);
+  }, [transactions.length, totalSocietalDebt, initialActiveTab]);
 
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden">
@@ -43,6 +53,12 @@ export function TabView({
           onClick={() => setActiveTab("transactions")}
         >
           Transactions
+        </TabButton>
+        <TabButton
+          active={activeTab === "vendors"}
+          onClick={() => setActiveTab("vendors")}
+        >
+          Vendors
         </TabButton>
         <TabButton
           active={activeTab === "categories"}
@@ -71,6 +87,13 @@ export function TabView({
           <CategoryExperimentView
             transactions={transactions}
             totalSocietalDebt={totalSocietalDebt}
+          />
+        )}
+        {activeTab === "vendors" && (
+          <VendorBreakdownView
+            transactions={transactions}
+            totalSocietalDebt={totalSocietalDebt}
+            getColorClass={getColorClass}
           />
         )}
       </div>

@@ -14,7 +14,7 @@ import { FirebaseVerifier } from "@/features/debug/FirebaseVerifier";
 import { SandboxTestingPanel } from "@/features/debug/SandboxTestingPanel";
 import { loadUserTransactions, userHasData, deleteAllUserTransactions } from "@/features/analysis/directFirebaseLoader";
 import { Transaction } from "@/shared/types/transactions";
-import { PlaidConnectionSection } from "@/features/banking/PlaidConnectionSection";
+import PlaidLink from "@/features/banking/PlaidLink";
 import { config } from "@/config";
 
 // Determine if we're in development/sandbox mode
@@ -35,7 +35,6 @@ export default function Dashboard() {
   const previousUserIdRef = useRef<string | null>(null);
   const isLoadingDirectRef = useRef(false);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
-  const [autoReconnectStatus, setAutoReconnectStatus] = useState<string | null>(null);
   
   // Track direct Firebase loading state
   const [directLoadAttempted, setDirectLoadAttempted] = useState(false);
@@ -61,9 +60,8 @@ export default function Dashboard() {
     connectionStatus,
     transactions: bankTransactions,
     connectBank,
-    disconnectBank,
-    autoReconnectBank
-  } = useBankConnection(user);
+    disconnectBank
+  } = useBankConnection();
 
   // Transaction analysis
   const {
@@ -87,41 +85,6 @@ export default function Dashboard() {
       enableDebug();
     }
   }, [enableDebug]);
-
-  // Try to auto-reconnect bank when user is authenticated
-  useEffect(() => {
-    if (user && !connectionStatus.isConnected && !connectionStatus.isLoading) {
-      // Reset auto-reconnect status
-      setAutoReconnectStatus("Checking previous bank connection...");
-      
-      // Attempt auto-reconnect
-      autoReconnectBank()
-        .then(success => {
-          if (success) {
-            // Show success message briefly then clear it
-            setAutoReconnectStatus("Bank automatically reconnected");
-            console.log("🏦 Successfully auto-reconnected bank");
-            
-            // Clear the status message after 3 seconds to remove the spinner
-            setTimeout(() => {
-              setAutoReconnectStatus(null);
-            }, 3000);
-          } else {
-            setAutoReconnectStatus(null);
-            console.log("🏦 No previous bank connection found");
-          }
-        })
-        .catch(err => {
-          console.error("Error in auto-reconnect:", err);
-          setAutoReconnectStatus("Auto-reconnect failed");
-          
-          // Clear error message after 5 seconds
-          setTimeout(() => {
-            setAutoReconnectStatus(null);
-          }, 5000);
-        });
-    }
-  }, [user, connectionStatus.isConnected, connectionStatus.isLoading, autoReconnectBank]);
 
   // Detect user changes using a ref instead of state
   useEffect(() => {
@@ -272,11 +235,6 @@ export default function Dashboard() {
 
   // Handle Plaid success callback
   const handlePlaidSuccess = useCallback((publicToken: string) => {
-    if (!publicToken) {
-      console.warn("Empty public token received");
-      return;
-    }
-    
     console.log("🏦 Bank Connection Successful");
     connectBank(publicToken);
   }, [connectBank]);
@@ -377,24 +335,6 @@ export default function Dashboard() {
         {/* Error display */}
         {error && <ErrorAlert message={error} />}
 
-        {/* Auto-reconnect status message */}
-        {autoReconnectStatus && (
-          <div className="mb-4 bg-blue-50 border border-blue-200 text-blue-700 px-4 py-2 rounded flex items-center transition-opacity duration-300">
-            {autoReconnectStatus.includes("Checking") || autoReconnectStatus.includes("reconnecting") ? (
-              <div className="w-4 h-4 mr-2 border-t-2 border-r-2 border-blue-700 rounded-full animate-spin"></div>
-            ) : autoReconnectStatus.includes("successful") || autoReconnectStatus.includes("reconnected") ? (
-              <svg className="w-4 h-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-              </svg>
-            ) : (
-              <svg className="w-4 h-4 mr-2 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-              </svg>
-            )}
-            {autoReconnectStatus}
-          </div>
-        )}
-
         {/* Bank Connection Section - Only shown when not connected */}
         {!effectiveConnectionStatus.isConnected && (
           <div className="my-6 p-4 border rounded-lg bg-blue-50 text-center">
@@ -404,10 +344,7 @@ export default function Dashboard() {
             <p className="text-sm text-blue-700 mb-4">
               Connect your bank account to analyze your transactions and calculate your societal debt.
             </p>
-            <PlaidConnectionSection 
-              onSuccess={handlePlaidSuccess}
-              isConnected={effectiveConnectionStatus.isConnected}
-            />
+            <PlaidLink onSuccess={handlePlaidSuccess} />
           </div>
         )}
 
@@ -419,6 +356,8 @@ export default function Dashboard() {
               transactions={analyzedData.transactions}
               totalSocietalDebt={analyzedData.totalSocietalDebt}
               getColorClass={getColorClass}
+              // Set initial active tab to 'impact' (the summary view)
+              initialActiveTab="impact"
             />
           )}
           
@@ -458,18 +397,20 @@ export default function Dashboard() {
           )}
         </div>
         
-        {/* Debug panel toggle */}
-        <div className="mt-4 text-center">
-          <button 
-            onClick={() => setShowDebugPanel(!showDebugPanel)}
-            className="text-xs text-blue-600 underline"
-          >
-            {showDebugPanel ? "Hide Debug Panel" : "Show Debug Panel"}
-          </button>
-        </div>
+        {/* Debug panel toggle - only show in development/sandbox mode */}
+        {isSandboxMode && (
+          <div className="mt-4 text-center">
+            <button 
+              onClick={() => setShowDebugPanel(!showDebugPanel)}
+              className="text-xs text-blue-600 underline"
+            >
+              {showDebugPanel ? "Hide Debug Panel" : "Show Debug Panel"}
+            </button>
+          </div>
+        )}
         
-        {/* Debug panel with all debugging tools */}
-        {showDebugPanel && (
+        {/* Debug panel with all debugging tools - only show in development/sandbox mode */}
+        {isSandboxMode && showDebugPanel && (
           <div className="mt-4 p-4 border border-gray-300 rounded bg-gray-50">
             <h3 className="font-bold text-gray-700 mb-2">Debug Tools</h3>
             
@@ -514,35 +455,14 @@ export default function Dashboard() {
               </div>
             </div>
             
-            {/* Bank connection test */}
-            <div className="mt-3">
-              <h4 className="font-semibold text-sm text-gray-700 mb-2">Bank Connection</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <button 
-                  onClick={() => autoReconnectBank()}
-                  className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm"
-                >
-                  Test Auto-Reconnect
-                </button>
-                <button 
-                  onClick={disconnectBank}
-                  className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm"
-                >
-                  Force Disconnect
-                </button>
-              </div>
-            </div>
-            
             {/* Sandbox testing tools - only visible in development/sandbox mode */}
-            {isSandboxMode && (
-              <SandboxTestingPanel 
-                user={user}
-                onLoadSampleData={handleLoadSampleData}
-                onClearData={handleResetTransactions}
-                isLoading={isLoading}
-                setFakeConnectionStatus={setDebugConnectionStatus}
-              />
-            )}
+            <SandboxTestingPanel 
+              user={user}
+              onLoadSampleData={handleLoadSampleData}
+              onClearData={handleResetTransactions}
+              isLoading={isLoading}
+              setFakeConnectionStatus={setDebugConnectionStatus}
+            />
 
             {/* Status information */}
             <div className="mt-3 p-2 border border-gray-200 rounded bg-white">
@@ -565,9 +485,6 @@ export default function Dashboard() {
                 
                 <div>Transactions Count:</div>
                 <div>{analyzedData?.transactions.length || 0}</div>
-                
-                <div>Auto-Reconnect Status:</div>
-                <div>{autoReconnectStatus || 'Not Active'}</div>
               </div>
             </div>
           </div>

@@ -75,6 +75,7 @@ Rules:
 
 6) Output Guidelines:
    - Be consistent in practice naming across transactions
+   - Be skeptical of information that comes directly from the vendor.
    - Format societal debt calculations based on the weighted sum of all practices
    - For unknown merchant types or when uncertain, return empty arrays for practices
    - Quality is more important than quantity - it's better to correctly identify one practice than to assign multiple inaccurate ones
