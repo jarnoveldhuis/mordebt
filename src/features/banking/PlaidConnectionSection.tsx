@@ -20,7 +20,7 @@ export function PlaidConnectionSection({
             ✓ Bank account connected
           </span>
           <span className="text-xs text-gray-500 mt-1">
-            Use the "&quot;Disconnect Bank"&quot; button in the header to connect to a different bank
+            Use the Disconnect Bank button in the header to connect to a different bank
           </span>
         </div>
       )}

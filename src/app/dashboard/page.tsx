@@ -1,14 +1,17 @@
-// src/app/dashboard/page.tsx - Updated with bank disconnect functionality
+// Determine if we're in development/sandbox mode
+
+// src/app/dashboard/page.tsx
 "use client";
+
+
+const isSandboxMode = process.env.NODE_ENV === 'development' || config.plaid.isSandbox;
 
 import { useEffect, useCallback, useRef, useState } from "react";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { Header } from "@/shared/components/Header";
-import { PlaidConnectionSection } from "@/app/api/banking/PlaidConnectionSection";
 import { LoadingSpinner } from "@/shared/components/ui/LoadingSpinner";
 import { ErrorAlert } from "@/shared/components/ui/ErrorAlert";
 import { TabView } from "@/features/analysis/TabView";
-import { config } from "@/config/index";
 import { useTransactionStorage } from "@/features/analysis/useTransactionStorage";
 import { useTransactionAnalysis } from "@/features/analysis/useTransactionAnalysis";
 import { useBankConnection } from "@/features/banking/useBankConnection";
@@ -16,6 +19,8 @@ import { FirebaseVerifier } from "@/features/debug/FirebaseVerifier";
 import { SandboxTestingPanel } from "@/features/debug/SandboxTestingPanel";
 import { loadUserTransactions, userHasData, deleteAllUserTransactions } from "@/features/analysis/directFirebaseLoader";
 import { Transaction } from "@/shared/types/transactions";
+import PlaidLink from "@/features/banking/PlaidLink";
+import { config } from "@/config";
 
 // Helper function to get color class for debt values
 function getColorClass(value: number): string {
@@ -57,8 +62,7 @@ export default function Dashboard() {
     connectionStatus,
     transactions: bankTransactions,
     connectBank,
-    disconnectBank,
-    setTransactions: setBankTransactions 
+    disconnectBank
   } = useBankConnection();
 
   // Transaction analysis
@@ -68,8 +72,14 @@ export default function Dashboard() {
     analyzeTransactions
   } = useTransactionAnalysis();
 
-  // Determine if we're in development/sandbox mode
-  const isSandboxMode = process.env.NODE_ENV === 'development' || config.plaid.isSandbox;
+  // State for debug mode fake connection status
+  const [debugConnectionStatus, setDebugConnectionStatus] = useState(false);
+  
+  // Merge real and debug connection statuses
+  const effectiveConnectionStatus = {
+    ...connectionStatus,
+    isConnected: connectionStatus.isConnected || debugConnectionStatus
+  };
   
   // Auto-enable Firebase debugging in development
   useEffect(() => {
@@ -77,43 +87,6 @@ export default function Dashboard() {
       enableDebug();
     }
   }, [enableDebug]);
-
-  // Handle loading sample data directly
-  const handleLoadSampleData = useCallback((sampleTransactions: Transaction[]) => {
-    if (!sampleTransactions || sampleTransactions.length === 0) {
-      console.error("No sample transactions provided");
-      return;
-    }
-    
-    console.log(`Loading ${sampleTransactions.length} sample transactions directly`);
-    
-    // Mark transactions with analysis placeholders
-    const initializedTransactions = sampleTransactions.map(tx => ({
-      ...tx,
-      societalDebt: 0,
-      unethicalPractices: tx.unethicalPractices || [],
-      ethicalPractices: tx.ethicalPractices || [],
-      information: tx.information || {},
-      analyzed: false
-    }));
-    
-    // Set the transactions directly
-    setBankTransactions(initializedTransactions);
-    
-    // Analyze the transactions immediately
-    analyzeTransactions(initializedTransactions);
-  }, [setBankTransactions, analyzeTransactions]);
-
-  // Handler for disconnecting bank account
-  const handleDisconnectBank = useCallback(() => {
-    // Reset UI state
-    resetStorage();
-    
-    // Disconnect the bank account
-    disconnectBank();
-    
-    console.log("Bank account disconnected");
-  }, [resetStorage, disconnectBank]);
 
   // Detect user changes using a ref instead of state
   useEffect(() => {
@@ -262,11 +235,24 @@ export default function Dashboard() {
     }
   }, [user, analyzedData, analysisStatus, saveTransactions, hasSavedData]);
 
-  // Handle Plaid success callback for real bank connection
-  const handlePlaidSuccess = useCallback((publicToken: string | null) => {
-    console.log("🏦 Real Bank Connection Successful");
+  // Handle Plaid success callback
+  const handlePlaidSuccess = useCallback((publicToken: string) => {
+    console.log("🏦 Bank Connection Successful");
     connectBank(publicToken);
   }, [connectBank]);
+
+  // Handle loading sample data from debug panel
+  const handleLoadSampleData = useCallback((sampleTransactions: Transaction[]) => {
+    if (!sampleTransactions || sampleTransactions.length === 0) {
+      console.error("No sample transactions provided");
+      return;
+    }
+    
+    console.log(`Loading ${sampleTransactions.length} sample transactions directly`);
+    
+    // Skip the bank connection process and go straight to analysis
+    analyzeTransactions(sampleTransactions);
+  }, [analyzeTransactions]);
 
   // Reset all user transactions
   const handleResetTransactions = useCallback(async () => {
@@ -295,18 +281,15 @@ export default function Dashboard() {
     disconnectBank(); // Also disconnect bank on logout
     logout();
   }, [resetStorage, disconnectBank, logout]);
-
-  // Handle enabling debug mode
-  const handleEnableDebug = useCallback(() => {
-    enableDebug();
-    alert("Firebase debugging enabled - check console for detailed logs");
-  }, [enableDebug]);
-
-  // Handle disabling debug mode
-  const handleDisableDebug = useCallback(() => {
-    disableDebug();
-    alert("Firebase debugging disabled");
-  }, [disableDebug]);
+  
+  // Handle disconnecting bank with transaction cleanup
+  const handleDisconnectBank = useCallback(() => {
+    // Disconnect bank
+    disconnectBank();
+    
+    // Also clear analyzed data
+    resetStorage();
+  }, [disconnectBank, resetStorage]);
 
   // Force direct load from Firebase
   const handleForceDirectLoad = useCallback(() => {
@@ -343,54 +326,76 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-100 flex justify-center">
       <div className="bg-white shadow-lg rounded-lg p-4 sm:p-8 max-w-2xl w-full mt-4 sm:mt-8">
-        {/* Header with user info, bank disconnect and logout */}
+        {/* Header with user dropdown menu for account actions */}
         <Header 
           user={user} 
           onLogout={handleLogout} 
           onDisconnectBank={handleDisconnectBank}
-          isBankConnected={connectionStatus.isConnected}
+          isBankConnected={effectiveConnectionStatus.isConnected}
         />
 
         {/* Error display */}
         {error && <ErrorAlert message={error} />}
 
-        {/* Bank Connection Section - Always visible */}
-        <div className="my-6 p-4 border rounded-lg bg-blue-50 text-center">
-          <h2 className="text-lg font-semibold text-blue-800 mb-2">
-            {connectionStatus.isConnected ? "Bank Connection" : "Connect Your Bank"}
-          </h2>
-          <p className="text-sm text-blue-700 mb-4">
-            {connectionStatus.isConnected 
-              ? "You can disconnect and reconnect to a different bank account."
-              : "Connect your bank account to analyze your transactions and calculate your societal debt."}
-          </p>
-          <PlaidConnectionSection 
-            onSuccess={handlePlaidSuccess}
-            isConnected={connectionStatus.isConnected}
-          />
+        {/* Bank Connection Section - Only shown when not connected */}
+        {!effectiveConnectionStatus.isConnected && (
+          <div className="my-6 p-4 border rounded-lg bg-blue-50 text-center">
+            <h2 className="text-lg font-semibold text-blue-800 mb-2">
+              Connect Your Bank
+            </h2>
+            <p className="text-sm text-blue-700 mb-4">
+              Connect your bank account to analyze your transactions and calculate your societal debt.
+            </p>
+            <PlaidLink onSuccess={handlePlaidSuccess} />
+          </div>
+        )}
+
+        {/* Main content area with tabs or loading indicator */}
+        <div className="relative">
+          {/* Show tab view if we have data (regardless of connection status) */}
+          {hasData && analyzedData && (
+            <TabView
+              transactions={analyzedData.transactions}
+              totalSocietalDebt={analyzedData.totalSocietalDebt}
+              getColorClass={getColorClass}
+            />
+          )}
+          
+          {/* No data message when no transactions are available and not loading */}
+          {!hasData && !isLoading && (
+            <div className="bg-white rounded-lg shadow-md p-6 text-center">
+              <h2 className="text-xl font-semibold text-gray-800 mb-2">No Transactions Found</h2>
+              <p className="text-gray-600 mb-4">
+                {effectiveConnectionStatus.isConnected 
+                  ? "We couldn't find any transactions in your connected account." 
+                  : "Connect your bank or use the debug tools to load transactions."}
+              </p>
+              {effectiveConnectionStatus.isConnected && (
+                <button
+                  onClick={() => disconnectBank()}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded"
+                >
+                  Try Connecting Again
+                </button>
+              )}
+            </div>
+          )}
+          
+          {/* Loading spinner - positioned within the content area */}
+          {isLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-80 z-10 rounded-lg">
+              <LoadingSpinner 
+                message={
+                  connectionStatus.isLoading 
+                    ? "Loading transactions..." 
+                    : isLoadingDirectRef.current
+                      ? "Loading data directly from Firebase..."
+                      : "Analyzing your transactions..."
+                } 
+              />
+            </div>
+          )}
         </div>
-
-        {/* Loading states */}
-        {isLoading && (
-          <LoadingSpinner 
-            message={
-              connectionStatus.isLoading 
-                ? "Loading transactions..." 
-                : isLoadingDirectRef.current
-                  ? "Loading data directly from Firebase..."
-                  : "Analyzing your transactions..."
-            } 
-          />
-        )}
-
-        {/* Main content - show when we have analyzed data */}
-        {hasData && analyzedData && (
-          <TabView
-            transactions={analyzedData.transactions}
-            totalSocietalDebt={analyzedData.totalSocietalDebt}
-            getColorClass={getColorClass}
-          />
-        )}
         
         {/* Debug panel toggle */}
         <div className="mt-4 text-center">
@@ -434,13 +439,13 @@ export default function Dashboard() {
               <h4 className="font-semibold text-sm text-gray-700 mb-2">Firebase Debug</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <button 
-                  onClick={handleEnableDebug}
+                  onClick={enableDebug}
                   className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm"
                 >
                   Enable Firebase Debug
                 </button>
                 <button 
-                  onClick={handleDisableDebug}
+                  onClick={disableDebug}
                   className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm"
                 >
                   Disable Firebase Debug
@@ -455,6 +460,7 @@ export default function Dashboard() {
                 onLoadSampleData={handleLoadSampleData}
                 onClearData={handleResetTransactions}
                 isLoading={isLoading}
+                setFakeConnectionStatus={setDebugConnectionStatus}
               />
             )}
 

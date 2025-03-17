@@ -8,13 +8,15 @@ interface SandboxTestingPanelProps {
   onLoadSampleData: (transactions: Transaction[]) => void;
   onClearData: () => Promise<void>;
   isLoading: boolean;
+  setFakeConnectionStatus?: (isConnected: boolean) => void;
 }
 
 export function SandboxTestingPanel({
   user,
   onLoadSampleData,
   onClearData,
-  isLoading
+  isLoading,
+  setFakeConnectionStatus
 }: SandboxTestingPanelProps) {
   const [isResetting, setIsResetting] = useState(false);
   const [loadingSample, setLoadingSample] = useState(false);
@@ -77,6 +79,11 @@ export function SandboxTestingPanel({
         information: {}
       }));
       
+      // Update fake connection status if available
+      if (setFakeConnectionStatus) {
+        setFakeConnectionStatus(true);
+      }
+      
       // Send to parent
       onLoadSampleData(processedTransactions);
       
@@ -86,7 +93,7 @@ export function SandboxTestingPanel({
     } finally {
       setLoadingSandbox(false);
     }
-  }, [isLoading, loadingSandbox, onLoadSampleData]);
+  }, [isLoading, loadingSandbox, onLoadSampleData, setFakeConnectionStatus]);
   
   // Load direct sample data
   const fetchLocalSampleData = useCallback(async () => {
@@ -121,6 +128,11 @@ export function SandboxTestingPanel({
         information: {}
       }));
       
+      // Update fake connection status if available
+      if (setFakeConnectionStatus) {
+        setFakeConnectionStatus(true);
+      }
+      
       // Pass to parent
       onLoadSampleData(processedTransactions);
       
@@ -130,7 +142,7 @@ export function SandboxTestingPanel({
     } finally {
       setLoadingSample(false);
     }
-  }, [isLoading, loadingSample, onLoadSampleData]);
+  }, [isLoading, loadingSample, onLoadSampleData, setFakeConnectionStatus]);
   
   // Clear all user data
   const resetUserTransactions = useCallback(async () => {
@@ -144,6 +156,12 @@ export function SandboxTestingPanel({
     
     try {
       await onClearData();
+      
+      // Also reset fake connection status if available
+      if (setFakeConnectionStatus) {
+        setFakeConnectionStatus(false);
+      }
+      
       alert("Successfully cleared all transaction data!");
       // Force page reload to reset all state
       window.location.reload();
@@ -153,7 +171,7 @@ export function SandboxTestingPanel({
     } finally {
       setIsResetting(false);
     }
-  }, [user, isResetting, isLoading, onClearData]);
+  }, [user, isResetting, isLoading, onClearData, setFakeConnectionStatus]);
   
   return (
     <div className="p-4 border-2 border-yellow-400 rounded-lg bg-yellow-50 my-4">

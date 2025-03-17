@@ -3,20 +3,46 @@ import OpenAI from "openai";
 import { Transaction, AnalyzedTransactionData } from "./types";
 import { transactionAnalysisPrompt } from "./prompts";
 import { config } from "@/config";
+import type { ChatCompletion } from "openai/resources/chat";
 
-interface OpenAIResponse {
-  transactions: Transaction[];
+// Define consolidated interfaces for OpenAI API
+interface Citation {
+  url: string;
+  title: string;
+  start_index?: number;
+  end_index?: number;
 }
 
+interface OpenAIAnnotation {
+  type: string;
+  url_citation?: Citation;
+}
+
+// Interface for OpenAI API parameters
+interface OpenAICompletionParams {
+  model: string;
+  messages: Array<{
+    role: "system" | "user" | "assistant";
+    content: string;
+  }>;
+  web_search_options?: {
+    search_context_size?: string;
+  };
+}
+
+// Simplified interface for tracking citation info
 interface CitationInfo {
   url: string;
   title: string;
   relevantPractice?: string;
 }
 
-/**
- * Stores URL citations extracted from OpenAI responses
- */
+// Interface for OpenAI JSON response format
+interface OpenAIResponse {
+  transactions: Transaction[];
+}
+
+// Store extracted citations for reuse
 const extractedCitations: Record<string, string> = {};
 
 /**
@@ -24,7 +50,7 @@ const extractedCitations: Record<string, string> = {};
  */
 function processCitationReferences(
   information: Record<string, string>,
-  annotations: any[] | undefined
+  annotations: OpenAIAnnotation[] | undefined
 ): Record<string, string> {
   const processed: Record<string, string> = {};
   
@@ -97,14 +123,12 @@ export async function analyzeTransactionsCore(
 
   const isSearchEnabled = config.openai.model.includes("search");
   console.log(
-    `📡 Sending ${
-      transactionsToAnalyze.length
-    } transactions to OpenAI using model: ${config.openai.model} (search ${
-      isSearchEnabled ? "enabled" : "disabled"
-    })`
+    `📡 Sending ${transactionsToAnalyze.length} transactions to OpenAI using model: ${
+      config.openai.model
+    } (search ${isSearchEnabled ? "enabled" : "disabled"})`
   );
 
-  let responseAnnotations: any[] | undefined;
+  let annotations: OpenAIAnnotation[] | undefined;
 
   try {
     // Ensure we have valid transactions with required fields
@@ -137,47 +161,71 @@ ADDITIONAL INSTRUCTIONS FOR WEB SEARCH CAPABILITY:
 6. Do not include any text or explanations outside of the JSON structure.
 `;
 
-    // Configure the API request differently based on model type
-    let response;
-    const citations: CitationInfo[] = [];
-
-    if (isSearchEnabled) {
-      // For search-enabled models, add web_search_options with appropriate settings
-      response = await openai.chat.completions.create({
-        model: config.openai.model,
-        web_search_options: {
-          search_context_size: config.openai.searchContextSize || "low",
-        },
-        messages: [
-          {
-            role: "system",
-            content: systemPrompt,
-          },
-          {
-            role: "user",
-            content: `Analyze these transactions and return valid JSON in the exact format requested.
+    // Create a response based on whether search is enabled
+    let rawResponse: ChatCompletion;
+    const userMessage = isSearchEnabled 
+      ? `Analyze these transactions and return valid JSON in the exact format requested.
 For each merchant, try to find current information about their ethical practices and sustainability initiatives.
 Include any relevant ethical information, but ensure your response is valid JSON.
 
-${JSON.stringify({ transactions: sanitizedTransactions })}`,
-          },
+${JSON.stringify({ transactions: sanitizedTransactions })}`
+      : JSON.stringify({ transactions: sanitizedTransactions });
+
+    if (isSearchEnabled) {
+      // For search-enabled models with custom parameters
+      const searchParams = {
+        model: config.openai.model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage }
         ],
-      });
+        web_search_options: {
+          search_context_size: config.openai.searchContextSize || "low",
+        }
+      } as OpenAICompletionParams;
+      
+      // Define an extended interface for the API parameters
+      // type WebSearchOptions = {
+      //   web_search_options?: {
+      //     search_context_size?: string;
+      //   };
+      // };
+      
+      // Use type assertion with the extended interface
+      rawResponse = await openai.chat.completions.create(searchParams as OpenAICompletionParams) as ChatCompletion;
+    } else {
+      // For standard models
+      rawResponse = await openai.chat.completions.create({
+        model: config.openai.model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage }
+        ],
+        stream: false
+      }) as ChatCompletion;
+    }
 
-      // Save annotations for later processing
-      responseAnnotations = response.choices[0]?.message?.annotations;
+    // Extract annotations if they exist
+    const responseMessage = rawResponse.choices[0]?.message;
+    const messageContent = responseMessage?.content || "";
+    
+    // Check if annotations exist on the message using type assertion
+    const messageObj = responseMessage as unknown as {annotations?: OpenAIAnnotation[]};
+    annotations = messageObj.annotations;
 
-      // Extract citations if available
-      if (responseAnnotations) {
-        responseAnnotations.forEach((annotation) => {
-          if (annotation.type === "url_citation" && annotation.url_citation) {
-            const { url, title, start_index, end_index } =
-              annotation.url_citation;
-            if (url && title) {
-              // Try to extract which practice this citation is relevant to
-              // by examining the text around the citation
-              const messageContent =
-                response.choices[0]?.message?.content || "";
+    // Log any citations found
+    const citations: CitationInfo[] = [];
+    if (annotations) {
+      annotations.forEach((annotation) => {
+        if (annotation.type === "url_citation" && annotation.url_citation) {
+          const { url, title, start_index, end_index } = annotation.url_citation;
+          
+          if (url && title) {
+            // Try to extract which practice this citation is relevant to
+            // by examining the text around the citation
+            let relevantPractice: string | undefined;
+            
+            if (typeof start_index === 'number' && typeof end_index === 'number') {
               const surroundingText = messageContent.substring(
                 Math.max(0, start_index - 100),
                 Math.min(messageContent.length, end_index + 100)
@@ -196,179 +244,37 @@ ${JSON.stringify({ transactions: sanitizedTransactions })}`,
                 "Resource Depletion",
               ];
 
-              const relevantPractice = commonPractices.find((practice) =>
+              relevantPractice = commonPractices.find((practice) =>
                 surroundingText.includes(practice)
               );
-
-              citations.push({
-                url,
-                title,
-                relevantPractice,
-              });
             }
+
+            citations.push({ url, title, relevantPractice });
           }
-        });
-      }
-
-      console.log(
-        `🔍 OpenAI search-enabled response received with ${citations.length} citations`
-      );
-
-      // Log raw response for debugging
-      console.log(
-        "Raw response content (first 500 chars):",
-        (response.choices[0]?.message?.content || "").substring(0, 500)
-      );
-      // Extract the raw text from the response
-      const rawContent = response.choices[0]?.message?.content;
-      if (!rawContent) {
-        throw new Error(
-          "OpenAI request returned empty response. Please try again."
-        );
-      }
-
-      // Create detailed logs of the raw content and response structure
-      console.log("==== DETAILED RAW RESPONSE LOGS ====");
-      console.log("Full raw content:", rawContent);
-
-      // Log the annotations if they exist
-      if (responseAnnotations) {
-        console.log(
-          "Response has annotations structure:",
-          JSON.stringify(responseAnnotations, null, 2)
-        );
-
-        // Examine each annotation in detail
-        responseAnnotations.forEach((annotation, index) => {
-          console.log(
-            `Annotation ${index}:`,
-            JSON.stringify(annotation, null, 2)
-          );
-
-          if (annotation.type === "url_citation") {
-            console.log(`Citation URL: ${annotation.url_citation?.url}`);
-            console.log(`Citation title: ${annotation.url_citation?.title}`);
-
-            // Extract and log the text being cited
-            if (
-              annotation.url_citation?.start_index !== undefined &&
-              annotation.url_citation?.end_index !== undefined
-            ) {
-              const citedText = rawContent.substring(
-                annotation.url_citation.start_index,
-                annotation.url_citation.end_index
-              );
-              console.log(`Cited text: "${citedText}"`);
-            }
-          }
-        });
-      }
-
-      // Inspect for any patterns that look like citations
-      const citationPatterns = [
-        /\[CITATION:([^\]]+)\]/g,
-        /\[\^?(\d+)\]/g,
-        /\(([^)]+)\)/g,
-      ];
-
-      citationPatterns.forEach((pattern) => {
-        const matches = [...rawContent.matchAll(pattern)];
-        if (matches.length > 0) {
-          console.log(
-            `Found ${matches.length} potential citations using pattern ${pattern}:`
-          );
-          matches.forEach((match) => {
-            console.log(`- ${match[0]} (captured: ${match[1]})`);
-          });
         }
       });
-
-      // Also log any URLs found in the raw content
-      const urlPattern = /(https?:\/\/[^\s"']+)/g;
-      const urls = [...rawContent.matchAll(urlPattern)];
-      if (urls.length > 0) {
-        console.log(`Found ${urls.length} URLs in raw content:`);
-        urls.forEach((url) => {
-          console.log(`- ${url[0]}`);
-        });
-      }
-
-      console.log("==== END DETAILED LOGS ====");
-
-      // Now let's handle the citations differently
-      // Look for the special [CITATION:turn0search1] format and try to extract real URLs
-
-      // First, check if we have any turn/search references
-      const turnSearchPattern = /\[CITATION:turn(\d+)search(\d+)\]/g;
-      const turnSearchMatches = [...rawContent.matchAll(turnSearchPattern)];
-
-      if (turnSearchMatches.length > 0) {
-        console.log(`Found ${turnSearchMatches.length} turn/search references`);
-
-        // If we have annotations, try to map them to the turn/search references
-        if (responseAnnotations) {
-          // Create a mapping between turn/search refs and actual URLs
-          // This is imperfect but might help in some cases
-          const urlsByIndex = responseAnnotations
-            .filter((a) => a.type === "url_citation" && a.url_citation?.url)
-            .map((a) => a.url_citation?.url);
-
-          if (urlsByIndex.length > 0) {
-            console.log(
-              `Found ${urlsByIndex.length} URLs in annotations that might match references`
-            );
-            console.log(urlsByIndex);
-
-            // We'll use this mapping later when processing the transactions
-          }
-        }
-      }
-    } else {
-      // For standard models, use the regular approach
-      response = await openai.chat.completions.create({
-        model: config.openai.model,
-        messages: [
-          {
-            role: "system",
-            content: systemPrompt,
-          },
-          {
-            role: "user",
-            content: JSON.stringify({ transactions: sanitizedTransactions }),
-          },
-        ],
-      });
-
-      // Save annotations (would be empty for non-search models)
-      responseAnnotations = response.choices[0]?.message?.annotations;
-
-      console.log("🔍 OpenAI standard response received");
     }
+
+    console.log(`🔍 OpenAI response received with ${citations.length} citations`);
 
     // Extract the raw text from the response
-    const rawContent = response.choices[0]?.message?.content;
-    if (!rawContent) {
-      throw new Error(
-        "OpenAI request returned empty response. Please try again."
-      );
+    if (!messageContent) {
+      throw new Error("OpenAI request returned empty response. Please try again.");
     }
 
-    // Log the raw response for debugging
-    console.log("Raw response content:", rawContent);
-
     // Try to find JSON content in the response
-    let jsonString = rawContent;
+    let jsonString = messageContent;
 
     // Look for JSON between backticks (```) or code blocks
     const jsonRegex = /```(?:json)?\s*([\s\S]*?)\s*```/;
-    const jsonMatch = rawContent.match(jsonRegex);
+    const jsonMatch = messageContent.match(jsonRegex);
 
     if (jsonMatch && jsonMatch[1]) {
       jsonString = jsonMatch[1];
       console.log("📋 Extracted JSON from code block");
     } else {
       // Try to find JSON between curly braces if not in code block
-      const curlyBraceMatch = rawContent.match(/\{[\s\S]*\}/);
+      const curlyBraceMatch = messageContent.match(/\{[\s\S]*\}/);
       if (curlyBraceMatch) {
         jsonString = curlyBraceMatch[0];
         console.log("📋 Extracted JSON using curly brace detection");
@@ -392,17 +298,13 @@ ${JSON.stringify({ transactions: sanitizedTransactions })}`,
           .replace(/,\s*]/g, "]") // Remove trailing commas in arrays
           .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3'); // Add quotes around keys
 
-        console.log(
-          "🔧 Attempting to fix JSON:",
-          fixedJson.substring(0, 500) + "..."
-        );
+        console.log("🔧 Attempting to fix JSON");
         analyzedData = JSON.parse(fixedJson) as OpenAIResponse;
         console.log("✅ JSON fixed and parsed successfully");
       } catch (fixErr) {
         console.error("Failed to fix JSON:", fixErr);
 
-        // If all else fails, return a minimal valid structure with the original transactions
-        // marked as analyzed but without detailed analysis
+        // If all else fails, return a minimal valid structure
         console.log("⚠️ Creating fallback analysis data");
 
         const fallbackTransactions = sanitizedTransactions.map((tx) => ({
@@ -412,8 +314,7 @@ ${JSON.stringify({ transactions: sanitizedTransactions })}`,
           ethicalPractices: [],
           practiceWeights: {},
           information: {
-            _error:
-              "Failed to analyze this transaction due to API response format issues.",
+            _error: "Failed to analyze this transaction due to API response format issues.",
           },
           analyzed: true,
         }));
@@ -469,7 +370,7 @@ ${JSON.stringify({ transactions: sanitizedTransactions })}`,
     analyzedData.transactions.forEach(tx => {
       if (tx.information) {
         // Use our citation processor
-        tx.information = processCitationReferences(tx.information, responseAnnotations);
+        tx.information = processCitationReferences(tx.information, annotations);
       }
     });
 

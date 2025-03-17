@@ -1,3 +1,4 @@
+// src/features/banking/PlaidLink.tsx
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -22,7 +23,7 @@ declare global {
 }
 
 interface PlaidLinkProps {
-  onSuccess: (public_token: string | null) => void;
+  onSuccess: (public_token: string) => void;
 }
 
 export default function PlaidLink({ onSuccess }: PlaidLinkProps) {
@@ -32,12 +33,6 @@ export default function PlaidLink({ onSuccess }: PlaidLinkProps) {
 
   // Fetch Link token on component mount
   useEffect(() => {
-    // Skip in sandbox mode
-    if (config.plaid.isSandbox || config.plaid.useSampleData) {
-      console.log("⚠️ Skipping Link token in Sandbox/Sample mode");
-      return;
-    }
-    
     async function fetchLinkToken() {
       try {
         setLoading(true);
@@ -60,30 +55,49 @@ export default function PlaidLink({ onSuccess }: PlaidLinkProps) {
       }
     }
 
+    // Always fetch link token regardless of environment
     fetchLinkToken();
   }, []);
 
-  // Handle sandbox mode separately
+  // Handle sandbox mode with bank selection
   const handleSandboxMode = useCallback(async () => {
     setLoading(true);
     setError(null);
     
     try {
-      // In sandbox mode, generate a sandbox token
-      const response = await fetch("/api/banking/sandbox_token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      // Instead of auto-generating a sandbox token, 
+      // let's get a link token for sandbox mode
+      const response = await fetch("/api/banking/create_link_token", { 
+        method: "GET",
+        headers: { 
+          "Content-Type": "application/json",
+          "X-Sandbox-Selection": "true" // Signal we want bank selection in sandbox
+        }
       });
       
       if (!response.ok) {
-        throw new Error(`Failed to create sandbox token: ${response.status}`);
+        throw new Error(`Failed to create sandbox link token: ${response.status}`);
       }
       
       const data = await response.json();
-      console.log("✅ Generated sandbox token");
+      console.log("✅ Generated sandbox link token for bank selection");
       
-      // Call onSuccess with the sandbox token
-      onSuccess(data.public_token);
+      // Now open Plaid Link with this token to allow bank selection
+      const handler = window.Plaid.create({
+        token: data.link_token,
+        onSuccess: (public_token: string) => {
+          console.log("✅ Plaid Success with bank selection!");
+          onSuccess(public_token);
+        },
+        onExit: (err?: PlaidErrorType) => {
+          if (err) {
+            console.error("❌ Plaid Link Exit Error:", err);
+            setError(err.display_message || err.error_message || "Plaid connection canceled");
+          }
+        },
+      });
+    
+      handler.open();
     } catch (err) {
       console.error("❌ Error in sandbox mode:", err);
       setError(err instanceof Error ? err.message : "Failed to create sandbox connection");
@@ -94,13 +108,13 @@ export default function PlaidLink({ onSuccess }: PlaidLinkProps) {
 
   // Open Plaid Link
   const openPlaidLink = useCallback(() => {
-    // Handle sandbox mode
-    if (config.plaid.isSandbox || config.plaid.useSampleData) {
+    // For sandbox mode, use the simplified approach
+    if (config.plaid.isSandbox) {
       handleSandboxMode();
       return;
     }
     
-    // Handle regular Plaid Link
+    // For production mode, use the regular Plaid Link
     if (!linkToken) {
       setError("Plaid initialization failed. Please try again.");
       return;
