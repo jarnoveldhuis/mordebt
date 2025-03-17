@@ -19,6 +19,7 @@
     "plaid": "^31.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "recharts": "^2.15.1",
     "vercel": "^41.4.0"
   },
   "devDependencies": {
