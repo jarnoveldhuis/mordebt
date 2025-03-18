@@ -38,10 +38,10 @@ function getColorClass(value: number): string {
 }
 
 // Interface for negative impact categories
-interface CategoryImpact {
-  name: string;
-  amount: number;
-}
+// interface CategoryImpact {
+//   name: string;
+//   amount: number;
+// }
 
 export default function Dashboard() {
   // Track direct Firebase loading state
