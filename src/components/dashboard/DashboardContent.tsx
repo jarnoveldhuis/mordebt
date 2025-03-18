@@ -1,4 +1,6 @@
 // src/components/dashboard/DashboardContent.tsx
+"use client";
+
 import { ReactNode } from 'react';
 
 interface DashboardContentProps {

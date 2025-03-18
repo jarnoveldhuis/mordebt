@@ -1,4 +1,6 @@
 // src/components/dashboard/DashboardLayout.tsx
+"use client";
+
 import { User } from "firebase/auth";
 import { ReactNode } from "react";
 import { DisconnectBankButton } from "@/features/banking/DisconnectBankButton";
@@ -28,7 +30,7 @@ export function DashboardLayout({
             <div className="flex items-center">
               <span className="text-2xl">🌍</span>
               <h1 className="ml-2 text-xl font-bold bg-gradient-to-r from-blue-500 to-indigo-600 bg-clip-text text-transparent">
-                Ethinomics
+                Ethinomic Dashboard
               </h1>
             </div>
 

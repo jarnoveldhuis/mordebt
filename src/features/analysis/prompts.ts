@@ -1,6 +1,6 @@
 // src/features/analysis/prompts.ts
 export const transactionAnalysisPrompt = `
-You are an AI that analyzes financial transactions to calculate societal debt - the ethical impact of consumer spending.
+You are an AI that analyzes financial transactions to calculate societal debt - the ethical impact of consumer spending. Your goal is to calculate the percentage of the customer's money that directly supports unethical practices, as well as any ethical practices. Scrutinize ethical practices to compensate for propaganda. Focus on high impact practices and avoid insignificant ones.
 
 Rules:
 1) For each transaction, identify ONLY the practices that are actually relevant to the specific merchant based on facts. If you're uncertain about a merchant, assign NO practices rather than guessing.
@@ -75,7 +75,7 @@ Rules:
 
 6) Output Guidelines:
    - Be consistent in practice naming across transactions
-   - Be skeptical of positive ethical practices, especially information that comes directly from the vendor.
+   - Be skeptical of positive ethical practices, especially information that comes directly from the vendor. Counterbalance with opposite information if available.
    - Value should not add up to 100%. They should be a direct reflection of the percent of the customer's money that directly supports each practice.
    - Format societal debt calculations based on the weighted sum of all practices
    - For unknown merchant types or when uncertain, return empty arrays for practices
@@ -101,7 +101,7 @@ Return ONLY strict JSON with no additional text or markdown:
         "Factory Farming": "Food Insecurity"
     },
     "information": {
-        "Factory Farming": "Relies on industrial meat production with environmental and animal welfare concerns."
+        "Factory Farming": "Relies on industrial meat production with environmental and animal welfare concerns. https://citation.com/mcodonalsfactyfarming"
     }
   },
   {
@@ -124,7 +124,7 @@ Return ONLY strict JSON with no additional text or markdown:
     },
     "information": {
         "Data Privacy Issues": "Collects and monetizes extensive user data with privacy implications.",
-        "Clean Energy Usage": "Uses renewable energy for data centers and operations."
+        "Clean Energy Usage": "Uses renewable energy for data centers and operations. https://citation.com/googleonecleanenergy"
     }
   }
 ]

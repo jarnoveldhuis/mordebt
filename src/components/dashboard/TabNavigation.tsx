@@ -1,4 +1,6 @@
 // src/components/dashboard/TabNavigation.tsx
+"use client";
+
 import { ReactNode } from 'react';
 
 interface TabItem {

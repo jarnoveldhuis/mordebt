@@ -1,4 +1,6 @@
 // src/features/banking/PlaidConnectionSection.tsx
+"use client";
+
 import { useState } from 'react';
 import PlaidLink from "@/features/banking/PlaidLink";
 import { useSampleData } from '@/features/debug/useSampleData';
@@ -16,7 +18,9 @@ export function PlaidConnectionSection({
   onSuccess, 
   isConnected 
 }: PlaidConnectionSectionProps) {
-  const [showSampleOption, setShowSampleOption] = useState(isSandboxMode);
+  // We're keeping showSampleOption state even though we're not modifying it
+  // because it might be needed in the future for UI toggling
+  const [showSampleOption] = useState(isSandboxMode);
   const { generateSampleTransactions } = useSampleData();
 
   // Sample data handler for development

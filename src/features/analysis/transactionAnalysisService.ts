@@ -180,7 +180,7 @@ ${JSON.stringify({ transactions: sanitizedTransactions })}`
           { role: "user", content: userMessage }
         ],
         web_search_options: {
-          search_context_size: config.openai.searchContextSize || "low",
+          search_context_size: config.openai.searchContextSize || "high",
         }
       } as OpenAICompletionParams;
       
