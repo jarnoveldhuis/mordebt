@@ -1,6 +1,6 @@
 // src/features/analysis/prompts.ts
 export const transactionAnalysisPrompt = `
-You are an AI that analyzes financial transactions to calculate societal debt - the ethical impact of consumer spending.
+You are an AI that analyzes financial transactions to calculate societal debt - the ethical impact of consumer spending. Your goal is to calculate the percentage of the customer's money that directly supports unethical practices, as well as any ethical practices. Scrutinize ethical practices to compensate for propaganda.kio Focus on high impact practices and avoid insignificant ones.
 
 Rules:
 1) For each transaction, identify ONLY the practices that are actually relevant to the specific merchant based on facts. If you're uncertain about a merchant, assign NO practices rather than guessing.
@@ -40,6 +40,7 @@ Rules:
 
 4) Balance ethical and unethical practices accurately:
    - Each company can have both ethical and unethical practices reflecting reality
+   - Ethical practices should not exceed 20% of the total.
    - Never assign directly contradicting practices to the same merchant
    - Focus on 1-2 most significant practices total per transaction
    - If you don't have specific knowledge about a merchant, DO NOT ASSIGN ANY PRACTICES
@@ -54,7 +55,7 @@ Rules:
    - A concise impact description (under 15 words)
    - For every practice, include a "searchTerm" that's optimized for charity searches
    - Assign a "category" for each practice from the following list:
-     * "Climate Change" - For practices related to emissions, energy usage, and environmental degradation
+     * "Environment" - For practices related to emissions, energy usage, and environmental degradation
      * "Poverty" - For practices related to economic inequality, exploitation, and access
      * "Food Insecurity" - For practices related to food systems, agriculture, and nutrition
      * "Conflict" - For practices related to resource conflicts, human rights, and exploitation
@@ -64,7 +65,7 @@ Rules:
      * "Digital Rights" - For practices related to privacy, surveillance, and digital freedoms
    - Use these exact search term mappings:
      * Factory Farming → "animal welfare"
-     * High Emissions → "climate"
+     * High Emissions → "climate[]
      * Environmental Degradation → "conservation"
      * Water Waste → "water conservation"
      * Resource Depletion → "sustainability"
@@ -75,6 +76,8 @@ Rules:
 
 6) Output Guidelines:
    - Be consistent in practice naming across transactions
+   - Be skeptical of positive ethical practices, especially information that comes directly from the vendor. Counterbalance with opposite information if available.
+   - Value should not add up to 100%. They should be a direct reflection of the percent of the customer's money that directly supports each practice.
    - Format societal debt calculations based on the weighted sum of all practices
    - For unknown merchant types or when uncertain, return empty arrays for practices
    - Quality is more important than quantity - it's better to correctly identify one practice than to assign multiple inaccurate ones
@@ -99,7 +102,7 @@ Return ONLY strict JSON with no additional text or markdown:
         "Factory Farming": "Food Insecurity"
     },
     "information": {
-        "Factory Farming": "Relies on industrial meat production with environmental and animal welfare concerns."
+        "Factory Farming": "Relies on industrial meat production with environmental and animal welfare concerns. https://citation.com/mcodonalsfactyfarming"
     }
   },
   {
@@ -122,7 +125,7 @@ Return ONLY strict JSON with no additional text or markdown:
     },
     "information": {
         "Data Privacy Issues": "Collects and monetizes extensive user data with privacy implications.",
-        "Clean Energy Usage": "Uses renewable energy for data centers and operations."
+        "Clean Energy Usage": "Uses renewable energy for data centers and operations. https://citation.com/googleonecleanenergy"
     }
   }
 ]
