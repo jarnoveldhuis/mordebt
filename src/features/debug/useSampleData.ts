@@ -14,7 +14,7 @@ export function useSampleData() {
       return date.toISOString().split('T')[0];
     };
     
-    const transactions = [
+    return [
       {
         date: formatDate(1),
         name: "Whole Foods Market",
@@ -33,7 +33,7 @@ export function useSampleData() {
           "Excessive Packaging": "Environmental Impact",
           "Organic Farming": "Environmental Impact"
         },
-        analyzed: false // Set to false to force reanalysis
+        analyzed: true
       },
       {
         date: formatDate(2),
@@ -53,7 +53,7 @@ export function useSampleData() {
           "Excessive Packaging": "Environmental Impact",
           "Labor Exploitation": "Social Responsibility"
         },
-        analyzed: false
+        analyzed: true
       },
       {
         date: formatDate(3),
@@ -76,7 +76,7 @@ export function useSampleData() {
           "Water Waste": "Environmental Impact",
           "Fair Trade Support": "Social Responsibility"
         },
-        analyzed: false
+        analyzed: true
       },
       {
         date: formatDate(5),
@@ -99,7 +99,7 @@ export function useSampleData() {
           "Data Privacy Issues": "Digital Rights",
           "Content Diversity": "Social Responsibility"
         },
-        analyzed: false
+        analyzed: true
       },
       {
         date: formatDate(7),
@@ -119,7 +119,7 @@ export function useSampleData() {
           "High Emissions": "Climate Change",
           "Environmental Degradation": "Environmental Impact"
         },
-        analyzed: false
+        analyzed: true
       },
       {
         date: formatDate(10),
@@ -139,12 +139,9 @@ export function useSampleData() {
           "Sustainable Materials": "Environmental Impact",
           "Ethical Investment": "Social Responsibility"
         },
-        analyzed: false
+        analyzed: true
       }
     ];
-    
-    // Let your system calculate the societalDebt values by setting analyzed to false
-    return transactions;
   }, []);
   
   // Calculate societal debt for the sample transactions
