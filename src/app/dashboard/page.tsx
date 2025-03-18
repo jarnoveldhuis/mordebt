@@ -1,5 +1,5 @@
 "use client";
-
+console.log('test')
 import { useEffect, useCallback, useState, useMemo } from "react";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { LoadingSpinner } from "@/shared/components/ui/LoadingSpinner";
