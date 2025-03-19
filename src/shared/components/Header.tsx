@@ -2,7 +2,7 @@
 "use client";
 
 import { User } from "firebase/auth";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 
 interface HeaderProps {
   user: User | null;
@@ -18,6 +18,7 @@ export function Header({
   isBankConnected = false 
 }: HeaderProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
@@ -32,6 +33,26 @@ export function Header({
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
+  }, []);
+
+  // Handle disconnect bank with confirmation
+  const handleDisconnectBank = useCallback(() => {
+    if (!onDisconnectBank) return;
+    
+    // If we're already in confirming state, perform the actual disconnect
+    if (isDisconnecting) {
+      onDisconnectBank();
+      setIsDisconnecting(false);
+      setDropdownOpen(false);
+    } else {
+      // Otherwise, enter confirmation state
+      setIsDisconnecting(true);
+    }
+  }, [isDisconnecting, onDisconnectBank]);
+
+  // Cancel disconnect
+  const cancelDisconnect = useCallback(() => {
+    setIsDisconnecting(false);
   }, []);
 
   return (
@@ -76,15 +97,34 @@ export function Header({
             
             {/* Disconnect bank option - only show if connected */}
             {isBankConnected && onDisconnectBank && (
-              <button
-                onClick={() => {
-                  onDisconnectBank();
-                  setDropdownOpen(false);
-                }}
-                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-50 focus:outline-none"
-              >
-                Disconnect Bank
-              </button>
+              <div className="px-4 py-2 border-b border-gray-100">
+                {isDisconnecting ? (
+                  <div className="space-y-2">
+                    <p className="text-xs text-gray-700">Are you sure? This will clear all transaction data.</p>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={handleDisconnectBank}
+                        className="text-sm text-white bg-red-600 hover:bg-red-700 px-2 py-1 rounded flex-1"
+                      >
+                        Disconnect
+                      </button>
+                      <button
+                        onClick={cancelDisconnect}
+                        className="text-sm text-gray-700 bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded flex-1"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleDisconnectBank}
+                    className="w-full text-left text-sm text-red-600 hover:text-red-800"
+                  >
+                    Disconnect Bank
+                  </button>
+                )}
+              </div>
             )}
             
             {/* Logout button */}

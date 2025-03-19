@@ -78,39 +78,54 @@ function isPlaidErrorResponse(err: unknown): err is PlaidErrorResponse {
   );
 }
 
+// Modified getTransactions function without fallbacks
 export async function getTransactions(
   accessToken: string, 
   retryCount = 0
 ): Promise<TransactionsGetResponse['transactions']> {
-  const MAX_RETRIES = 15; // Reduced to avoid conflict with UI retries
-  const RETRY_DELAY_MS = 10000 * Math.pow(2, retryCount); // Exponential backoff
+  const MAX_RETRIES = 2; // Reduced significantly to fail faster during testing
+  const RETRY_DELAY_MS = 5000 * Math.pow(1.5, retryCount); // Less aggressive backoff for testing
 
   try {
     const today = new Date();
-    const startDate = new Date(today.getFullYear(), today.getMonth(), -1);
+    // Get transactions from the last 30 days
+    const startDate = new Date();
+    startDate.setDate(today.getDate() - 30);
 
     // Log the request attempt
     console.log(`🔄 Fetching Plaid transactions (attempt ${retryCount + 1}/${MAX_RETRIES + 1})...`);
+    console.log(`Date range: ${startDate.toISOString().split('T')[0]} to ${today.toISOString().split('T')[0]}`);
 
     const response = await plaidClient.transactionsGet({
       access_token: accessToken,
       start_date: startDate.toISOString().split('T')[0],
-      end_date: today.toISOString().split('T')[0]
+      end_date: today.toISOString().split('T')[0],
+      options: {
+        include_personal_finance_category: true
+      }
     });
+
+    // Log the raw response for debugging
+    console.log(`Received ${response.data.transactions.length} transactions from Plaid`);
+    
+    // Log a sample transaction for debugging if available
+    if (response.data.transactions.length > 0) {
+      console.log("Sample transaction:", JSON.stringify(response.data.transactions[0]));
+    }
 
     return response.data.transactions;
   } catch (error) {
     // Log the complete error for debugging
     console.error(`❌ Plaid transactions error (attempt ${retryCount + 1}):`, error);
     
-    // If in sandbox mode, print the actual error response to help debug
-    if (config.plaid.isSandbox && isPlaidErrorResponse(error) && error.response?.data) {
+    // Log the actual error response to help debug
+    if (isPlaidErrorResponse(error) && error.response?.data) {
       console.error('Plaid API error details:', error.response.data);
     }
     
-    // For sandbox: automatically retry a few times with exponential backoff
-    if (config.plaid.isSandbox && retryCount < MAX_RETRIES) {
-      console.log(`⏱️ Sandbox mode: retrying in ${RETRY_DELAY_MS/10000} seconds...`);
+    // Only retry once or twice during testing to fail faster
+    if (retryCount < MAX_RETRIES) {
+      console.log(`⏱️ Retrying in ${RETRY_DELAY_MS/1000} seconds...`);
       await delay(RETRY_DELAY_MS);
       return getTransactions(accessToken, retryCount + 1);
     }
@@ -119,15 +134,21 @@ export async function getTransactions(
     if (isPlaidErrorResponse(error)) {
       // Handle PRODUCT_NOT_READY error
       if (error.response?.data?.error_code === "PRODUCT_NOT_READY") {
-        throw new Error("PRODUCT_NOT_READY");
+        throw new Error(`PRODUCT_NOT_READY: Transactions are not ready yet. Please try again later.`);
       }
       
       // Handle rate limiting
       if (error.response?.status === 429) {
-        throw new Error("RATE_LIMITED");
+        throw new Error(`RATE_LIMITED: Too many requests to Plaid API. Please try again later.`);
+      }
+
+      // Extract and return the specific Plaid error
+      if (error.response?.data?.error_message) {
+        throw new Error(`PLAID_ERROR: ${error.response.data.error_message}`);
       }
     }
     
+    // If we can't identify a specific error, throw the original
     throw error;
   }
 }

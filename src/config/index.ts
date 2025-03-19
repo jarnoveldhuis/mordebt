@@ -11,9 +11,9 @@ export const config = {
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
-    model: "gpt-4o-mini-search-preview",
+    model: "gpt-4o",
     timeout: 180000, // 3 minutes - increased for web search operations
-    webSearchEnabled: true, // Flag to indicate we're using web search capabilities
+    webSearchEnabled: false, // Flag to indicate we're using web search capabilities
     searchContextSize: "low", // Use minimal search context to reduce costs and speed up response
 
   },

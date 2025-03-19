@@ -1,6 +1,6 @@
 "use client";
-console.log('test')
-import { useEffect, useCallback, useState, useMemo } from "react";
+
+import { useEffect, useCallback, useState, useMemo, useRef } from "react";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { LoadingSpinner } from "@/shared/components/ui/LoadingSpinner";
 import { ErrorAlert } from "@/shared/components/ui/ErrorAlert";
@@ -16,6 +16,7 @@ import { TransactionList } from "@/features/analysis/TransactionList";
 import { ConsolidatedImpactView } from "@/features/analysis/ConsolidatedImpactView";
 import { CategoryExperimentView } from "@/features/analysis/CategoryExperimentView";
 import { PracticeDebtTable } from "@/features/analysis/PracticeDebtTable";
+import { useBankConnection } from '@/features/banking/useBankConnection';
 import {
   deleteAllUserTransactions,
   userHasData,
@@ -37,13 +38,10 @@ function getColorClass(value: number): string {
   return "text-red-700";
 }
 
-// Interface for negative impact categories
-// interface CategoryImpact {
-//   name: string;
-//   amount: number;
-// }
-
 export default function Dashboard() {
+  // Prevention flag for auto-loading after disconnect
+  const preventAutoLoadRef = useRef(false);
+  
   // Track direct Firebase loading state
   const [directLoadAttempted, setDirectLoadAttempted] = useState(false);
   const [isLoadingDirect, setIsLoadingDirect] = useState(false);
@@ -69,8 +67,17 @@ export default function Dashboard() {
   const { analyzedData, analysisStatus, analyzeTransactions } =
     useTransactionAnalysis();
 
+  // Bank connection with our custom hook
+  const { 
+    connectionStatus,
+    transactions: bankTransactions,
+    connectBank,
+    disconnectBank,
+    clearSavedTransactions
+  } = useBankConnection(user);
+
   // Track connection status independent of actual Plaid connection
-  const [connectionStatus, setConnectionStatus] = useState({
+  const [localConnectionStatus, setLocalConnectionStatus] = useState({
     isConnected: false,
     isLoading: false,
     error: null as string | null,
@@ -210,7 +217,7 @@ export default function Dashboard() {
       console.log(
         `Loading ${transactions.length} sample transactions directly`
       );
-//s
+
       // Make sure all transactions are marked as not analyzed so your system will process them
       const rawTransactions = transactions.map((tx) => ({
         ...tx,
@@ -222,7 +229,7 @@ export default function Dashboard() {
       analyzeTransactions(rawTransactions);
 
       // Update connection status once analysis starts
-      setConnectionStatus({
+      setLocalConnectionStatus({
         isConnected: true,
         isLoading: false,
         error: null,
@@ -237,33 +244,26 @@ export default function Dashboard() {
   // Handle Plaid success callback
   const handlePlaidSuccess = useCallback(
     async (publicToken: string | null) => {
-      // If no token is provided but we're in dev mode, use sample data
-      if (!publicToken && process.env.NODE_ENV === "development") {
-        console.log("🧪 Using sample data instead of Plaid");
-        handleLoadSampleData();
-        return;
-      }
-
-      // If no token and not in dev mode, show error
+      // If no token provided, show error - no fallback to sample data
       if (!publicToken) {
         console.error("No public token received from Plaid");
-        setConnectionStatus({
+        setLocalConnectionStatus({
           isConnected: false,
           isLoading: false,
-          error: "Failed to connect bank account. Please try again.",
+          error: "Failed to connect bank account: No public token received"
         });
         return;
       }
-
+  
       console.log("🏦 Bank Connection Successful with token:", publicToken);
-
+  
       // Set loading state
-      setConnectionStatus({
+      setLocalConnectionStatus({
         isConnected: false, // Don't set to true until we have transactions
         isLoading: true,
-        error: null,
+        error: null
       });
-
+  
       try {
         // Exchange public token for access token
         const exchangeResponse = await fetch("/api/banking/exchange_token", {
@@ -271,95 +271,108 @@ export default function Dashboard() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ public_token: publicToken }),
         });
-
+  
+        // Log the raw response for debugging
+        console.log("Token exchange response status:", exchangeResponse.status);
+        
         if (!exchangeResponse.ok) {
-          throw new Error(`Token exchange failed: ${exchangeResponse.status}`);
+          const errorText = await exchangeResponse.text();
+          console.error("Token exchange error response:", errorText);
+          throw new Error(`Token exchange failed: ${exchangeResponse.status} - ${errorText}`);
         }
-
-        const { access_token } = await exchangeResponse.json();
-
-        if (!access_token) {
+  
+        const tokenData = await exchangeResponse.json();
+        console.log("Token exchange response data:", tokenData);
+  
+        if (!tokenData.access_token) {
           throw new Error("No access token received from server");
         }
-
+  
         console.log("✅ Successfully exchanged token for access_token");
-
+  
         // Now get transactions with this access token
         const transactionsResponse = await fetch("/api/banking/transactions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ access_token }),
+          body: JSON.stringify({ access_token: tokenData.access_token }),
         });
-
+  
+        // Log the raw response for debugging
+        console.log("Transactions response status:", transactionsResponse.status);
+        
         if (!transactionsResponse.ok) {
-          throw new Error(
-            `Failed to fetch transactions: ${transactionsResponse.status}`
-          );
+          const errorText = await transactionsResponse.text();
+          console.error("Transactions error response:", errorText);
+          throw new Error(`Failed to fetch transactions: ${transactionsResponse.status} - ${errorText}`);
         }
-
+  
         const transactionsData = await transactionsResponse.json();
-        console.log(
-          `📊 Fetched ${transactionsData.length} transactions from Plaid`
-        );
-
-        // Map Plaid transactions to our format with type safety
-        const mappedTransactions = transactionsData.map(
-          (tx: Record<string, unknown>) => ({
-            date: String(tx.date || ""),
-            name: String(tx.name || "Unknown"),
-            amount: Math.abs(Number(tx.amount) || 0),
-            analyzed: false, // Ensure they get analyzed
-          })
-        );
-
-        // Analyze the transactions
-        if (mappedTransactions.length > 0) {
-          analyzeTransactions(mappedTransactions);
-
-          // Update connection status
-          setConnectionStatus({
-            isConnected: true,
-            isLoading: false,
-            error: null,
-          });
-
-          setDebugConnectionStatus(true);
-        } else {
-          // No transactions found
-          setConnectionStatus({
-            isConnected: true,
-            isLoading: false,
-            error: "No transactions found in this account",
-          });
+        console.log("Raw transactions response:", transactionsData);
+        
+        if (!Array.isArray(transactionsData)) {
+          console.error("Received non-array transactions data:", transactionsData);
+          throw new Error("Invalid transactions data: expected array but received " + 
+            (transactionsData === null ? "null" : typeof transactionsData));
         }
+  
+        console.log(`📊 Fetched ${transactionsData.length} transactions from Plaid`);
+  
+        // Map Plaid transactions to our format with type safety and data validation
+        const mappedTransactions = transactionsData.map((tx: Record<string, unknown>, index: number) => {
+          // Log each transaction for debugging
+          console.log(`Transaction ${index}:`, tx);
+          
+          // Validate and transform with defaults for missing data
+          return {
+            date: typeof tx.date === 'string' ? tx.date : new Date().toISOString().split('T')[0],
+            name: typeof tx.name === 'string' ? tx.name : `Unknown (${index})`,
+            amount: typeof tx.amount === 'number' ? Math.abs(tx.amount) : 0,
+            analyzed: false // Ensure they get analyzed
+          };
+        });
+  
+        // Ensure we have valid transactions
+        if (mappedTransactions.length === 0) {
+          setLocalConnectionStatus({
+            isConnected: true,
+            isLoading: false,
+            error: "No transactions found in this account"
+          });
+          return;
+        }
+  
+        // Analyze the transactions
+        analyzeTransactions(mappedTransactions);
+  
+        // Update connection status
+        setLocalConnectionStatus({
+          isConnected: true,
+          isLoading: false,
+          error: null
+        });
+  
+        setDebugConnectionStatus(true);
       } catch (error) {
         console.error("❌ Error during Plaid connection:", error);
-
-        // Show error to user
-        setConnectionStatus({
+  
+        // Show detailed error to user
+        setLocalConnectionStatus({
           isConnected: false,
           isLoading: false,
-          error:
-            error instanceof Error
-              ? error.message
-              : "Failed to connect bank account",
+          error: error instanceof Error 
+            ? `Connection failed: ${error.message}` 
+            : "Failed to connect bank account: Unknown error"
         });
-
-        // In sandbox mode, fall back to sample data
-        if (process.env.NODE_ENV === "development") {
-          console.log("⚠️ Falling back to sample data in development mode");
-          setTimeout(() => {
-            handleLoadSampleData();
-          }, 1000);
-        }
+        
+        // No fallback to sample data - we want to see the errors
       }
     },
-    [handleLoadSampleData, analyzeTransactions]
+    [analyzeTransactions]
   );
 
   // Try to load data directly from Firebase if hook-based loading fails
   const loadDirectFromFirebase = useCallback(async () => {
-    if (!user || isLoadingDirect || directLoadAttempted) return;
+    if (!user || isLoadingDirect || directLoadAttempted || preventAutoLoadRef.current) return;
 
     console.log(`🚨 Attempting direct Firebase load for user: ${user.uid}`);
     setIsLoadingDirect(true);
@@ -410,14 +423,15 @@ export default function Dashboard() {
     }
   }, [user, analyzeTransactions, directLoadAttempted, isLoadingDirect]);
 
-  // Effect to try direct loading if hook loading fails
+  // Effect to try direct loading if hook loading fails - now respects the prevention flag
   useEffect(() => {
     if (
       user &&
       !savedTransactions &&
       !storageLoading &&
       !directLoadAttempted &&
-      !analyzedData
+      !analyzedData &&
+      !preventAutoLoadRef.current // Check prevention flag before auto-loading
     ) {
       // If normal loading has completed but found no data, try direct load
       console.log(
@@ -436,7 +450,7 @@ export default function Dashboard() {
 
   // Handle successful data load from Firebase (via hook or direct)
   useEffect(() => {
-    if (savedTransactions && savedTransactions.length > 0 && user) {
+    if (savedTransactions && savedTransactions.length > 0 && user && !preventAutoLoadRef.current) {
       console.log(
         `📊 Using ${savedTransactions.length} saved transactions from hook`
       );
@@ -462,10 +476,9 @@ export default function Dashboard() {
       !hasSavedData &&
       !storageLoading &&
       !isLoadingDirect &&
-      !connectionStatus.isLoading
+      !localConnectionStatus.isLoading &&
+      !preventAutoLoadRef.current // Don't save if we're in disconnection mode
     ) {
-      // Use individual loading states
-
       // Add a small delay to avoid race conditions with component unmounting
       const saveTimeout = setTimeout(() => {
         console.log(
@@ -475,7 +488,7 @@ export default function Dashboard() {
           analyzedData.transactions,
           analyzedData.totalSocietalDebt
         ).catch((err) => console.error("Failed to save to Firebase:", err));
-      }, 1000); // Increased delay to avoid race conditions
+      }, 1000);
 
       return () => clearTimeout(saveTimeout);
     }
@@ -487,19 +500,22 @@ export default function Dashboard() {
     hasSavedData,
     storageLoading,
     isLoadingDirect,
-    connectionStatus.isLoading,
-  ]); // Fixed dependency array
+    localConnectionStatus.isLoading,
+  ]);
 
   // Reset all user transactions
   const handleResetTransactions = useCallback(async () => {
     if (!user) return Promise.resolve();
 
     try {
+      // Set prevention flag before resetting
+      preventAutoLoadRef.current = true;
+      
       // First reset the local state
       resetStorage();
 
       // Clear any connection status
-      setConnectionStatus({
+      setLocalConnectionStatus({
         isConnected: false,
         isLoading: false,
         error: null,
@@ -515,6 +531,11 @@ export default function Dashboard() {
 
       console.log("🗑️ All user transactions deleted");
 
+      // Clear prevention flag after a delay
+      setTimeout(() => {
+        preventAutoLoadRef.current = false;
+      }, 2000);
+
       // Force page reload to reset all state
       window.location.reload();
 
@@ -527,30 +548,53 @@ export default function Dashboard() {
 
   // Handle disconnecting bank
   const handleDisconnectBank = useCallback(() => {
-    setConnectionStatus({
+    console.log("User initiated bank disconnection");
+    
+    // Set prevention flag to block auto-loading after disconnect
+    preventAutoLoadRef.current = true;
+    
+    // Disconnect bank connection
+    disconnectBank();
+    
+    // Clear any saved transactions from the bank connection
+    clearSavedTransactions();
+    
+    // Reset transaction storage to prevent auto-loading from Firebase
+    resetStorage();
+    
+    // Reset local UI state
+    setLocalConnectionStatus({
       isConnected: false,
       isLoading: false,
-      error: null,
+      error: null
     });
-
+    
     setDebugConnectionStatus(false);
-
-    // Also clear analyzed data if needed
-    resetStorage();
-  }, [resetStorage]);
+    setDirectLoadAttempted(false);
+    setIsLoadingDirect(false);
+    
+    // Clear prevention flag after a reasonable delay
+    setTimeout(() => {
+      preventAutoLoadRef.current = false;
+    }, 2000);
+    
+    // Force a page reload to ensure a completely clean state
+    window.location.reload();
+  }, [disconnectBank, clearSavedTransactions, resetStorage]);
 
   // Determine if we have data to show
   const hasData = Boolean(analyzedData && analyzedData.transactions.length > 0);
 
   // Get error state
-  const error = connectionStatus.error || analysisStatus.error || storageError;
+  const error = localConnectionStatus.error || connectionStatus.error || analysisStatus.error || storageError;
   const effectiveConnectionStatus =
-    connectionStatus.isConnected || debugConnectionStatus;
+    localConnectionStatus.isConnected || connectionStatus.isConnected || debugConnectionStatus;
 
   // Get the currently active view component
   const renderActiveView = () => {
     // Check if any loading state is active
     const isLoading =
+      localConnectionStatus.isLoading ||
       connectionStatus.isLoading ||
       analysisStatus.status === "loading" ||
       storageLoading ||
@@ -561,7 +605,7 @@ export default function Dashboard() {
         <div className="flex items-center justify-center h-64">
           <LoadingSpinner
             message={
-              connectionStatus.isLoading
+              localConnectionStatus.isLoading || connectionStatus.isLoading
                 ? "Loading transactions..."
                 : isLoadingDirect
                 ? "Loading data directly from Firebase..."
@@ -585,7 +629,7 @@ export default function Dashboard() {
           </p>
           {effectiveConnectionStatus && (
             <button
-              onClick={() => handleDisconnectBank()}
+              onClick={handleDisconnectBank}
               className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded"
             >
               Try Connecting Again

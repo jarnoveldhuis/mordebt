@@ -39,7 +39,7 @@ export function DashboardSidebar({
 
   return (
     <div className="lg:col-span-1">
-      {/* Societal Debt Card */}
+      {/* Societal Credit Score */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
         <div
           className={`bg-gradient-to-r ${getDebtColor(
@@ -47,7 +47,7 @@ export function DashboardSidebar({
           )} p-6 text-white`}
         >
           <div className="text-center">
-            <h2 className="text-xl font-bold mb-1">Societal Debt</h2>
+            <h2 className="text-xl font-bold mb-1">Total Social Debt</h2>
             <div className="text-5xl font-black mb-2">
               ${Math.abs(totalSocietalDebt).toFixed(2)}
             </div>
@@ -57,22 +57,22 @@ export function DashboardSidebar({
           </div>
         </div>
 
-        {/* Debt summary */}
+        {/* Credit summary */}
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
-            <span className="text-gray-600">Positive Purchases</span>
-            <span className="font-bold text-green-600">
-              ${positiveImpact.toFixed(2)}
+            <span className="text-gray-600">Social Debt</span>
+            <span className="font-bold text-red-600">
+              ${offsetsThisMonth.toFixed(2)}
             </span>
           </div>
         </div>
 
-        {/* Negative impact */}
+        {/* Debt summary */}
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
-            <span className="text-gray-600">Negative Purchases</span>
-            <span className="font-bold text-red-600">
-              ${offsetsThisMonth.toFixed(2)}
+            <span className="text-gray-600">Social Credit</span>
+            <span className="font-bold text-green-600">
+              ${positiveImpact.toFixed(2)}
             </span>
           </div>
         </div>

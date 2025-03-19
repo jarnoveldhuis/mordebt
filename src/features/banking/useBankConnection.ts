@@ -21,6 +21,7 @@ interface UseBankConnectionResult {
   connectBank: (publicToken: string) => Promise<void>;
   disconnectBank: () => void;
   autoReconnectBank: () => Promise<boolean>;
+  clearSavedTransactions: () => void; // New function to clear transactions
 }
 
 export function useBankConnection(user: User | null): UseBankConnectionResult {
@@ -174,6 +175,11 @@ export function useBankConnection(user: User | null): UseBankConnectionResult {
     }
   }, [storeAccessToken, fetchTransactions]);
 
+  // Function to clear saved transactions
+  const clearSavedTransactions = useCallback(() => {
+    setTransactions([]);
+  }, []);
+
   // Auto reconnect function - called on component mount to restore previous connection
   const autoReconnectBank = useCallback(async (): Promise<boolean> => {
     // Don't try to reconnect if we're already connected or if there's no user
@@ -232,7 +238,7 @@ export function useBankConnection(user: User | null): UseBankConnectionResult {
     }
   }, [connectionStatus.isConnected, user, getStoredAccessToken, fetchTransactions]);
 
-  // Disconnect bank function
+  // Disconnect bank function with proper cleanup
   const disconnectBank = useCallback(() => {
     console.log("Disconnecting bank account");
     
@@ -262,6 +268,7 @@ export function useBankConnection(user: User | null): UseBankConnectionResult {
     transactions,
     connectBank,
     disconnectBank,
-    autoReconnectBank
+    autoReconnectBank,
+    clearSavedTransactions
   };
 }
