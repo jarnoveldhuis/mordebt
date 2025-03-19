@@ -1,28 +1,68 @@
 // src/features/banking/EmergencyResetButton.tsx
-import { forceDisconnectAndReload } from './forceDisconnect';
+import { useState } from 'react';
+import { bankConnectionService } from './bankConnectionService';
 
 interface EmergencyResetButtonProps {
-  className?: string;
+  variant?: 'default' | 'small' | 'icon';
 }
 
-export function EmergencyResetButton({ className = "" }: EmergencyResetButtonProps) {
-  const handleReset = () => {
-    if (confirm('⚠️ WARNING: This will completely disconnect your bank account and reset all connection data.\n\nAre you sure you want to proceed?')) {
-      // Show immediate feedback
-      alert('Disconnecting... Page will reload when complete.');
-      
-      // Execute force disconnect with page reload
-      forceDisconnectAndReload();
+export function EmergencyResetButton({ variant = 'default' }: EmergencyResetButtonProps) {
+  const [isResetting, setIsResetting] = useState(false);
+  
+  // Execute emergency disconnect
+  const handleEmergencyReset = async () => {
+    if (isResetting) return;
+    
+    if (!confirm('This will completely reset your bank connection and reload the page. Continue?')) {
+      return;
+    }
+    
+    setIsResetting(true);
+    
+    try {
+      await bankConnectionService.emergencyDisconnect();
+      // The page will reload automatically from the emergencyDisconnect function
+    } catch (error) {
+      console.error('Error during emergency reset:', error);
+      setIsResetting(false);
+      alert('Reset failed. Try reloading the page manually.');
     }
   };
   
+  // Render button based on variant
+  if (variant === 'small') {
+    return (
+      <button 
+        onClick={handleEmergencyReset}
+        disabled={isResetting}
+        className="text-xs text-red-600 underline hover:text-red-800"
+      >
+        {isResetting ? 'Resetting...' : 'Emergency Reset'}
+      </button>
+    );
+  }
+  
+  if (variant === 'icon') {
+    return (
+      <button 
+        onClick={handleEmergencyReset}
+        disabled={isResetting}
+        className="text-red-600 hover:text-red-800"
+        title="Emergency Connection Reset"
+      >
+        ⚠️
+      </button>
+    );
+  }
+  
+  // Default variant
   return (
-    <button
-      onClick={handleReset}
-      className={`bg-red-700 hover:bg-red-800 text-white px-4 py-2 rounded-lg flex items-center ${className}`}
+    <button 
+      onClick={handleEmergencyReset}
+      disabled={isResetting}
+      className="bg-red-100 text-red-700 hover:bg-red-200 border border-red-300 rounded px-3 py-1 text-sm"
     >
-      <span className="mr-2">⚠️</span>
-      <span>Emergency Bank Reset</span>
+      {isResetting ? 'Resetting Connection...' : 'Emergency Reset'}
     </button>
   );
 }

@@ -84,7 +84,14 @@ export function useTransactionAnalysis(): UseTransactionAnalysisResult {
 
         // Calculate total societal debt from existing data
         const totalDebt = transactions.reduce(
-          (sum, tx) => sum + (tx.societalDebt || 0),
+          (sum, tx) => {
+            // If this is a credit application, it directly reduces debt
+            if (tx.isCreditApplication) {
+              return sum - tx.amount; // Subtract the credit amount
+            }
+            // Otherwise use the standard societal debt
+            return sum + (tx.societalDebt || 0);
+          },
           0
         );
         
@@ -150,7 +157,14 @@ export function useTransactionAnalysis(): UseTransactionAnalysisResult {
 
       // Calculate metrics
       const totalDebt = sortedTransactions.reduce(
-        (sum, tx) => sum + (tx.societalDebt ?? 0),
+        (sum, tx) => {
+          // If this is a credit application, it directly reduces debt
+          if (tx.isCreditApplication) {
+            return sum - tx.amount; // Subtract the credit amount
+          }
+          // Otherwise use the standard societal debt
+          return sum + (tx.societalDebt || 0);
+        },
         0
       );
       
@@ -194,7 +208,14 @@ export function useTransactionAnalysis(): UseTransactionAnalysisResult {
         }));
         
         const totalDebt = fallbackTransactions.reduce(
-          (sum, tx) => sum + (tx.societalDebt || 0), 
+          (sum, tx) => {
+            // If this is a credit application, it directly reduces debt
+            if (tx.isCreditApplication) {
+              return sum - tx.amount; // Subtract the credit amount
+            }
+            // Otherwise use the standard societal debt
+            return sum + (tx.societalDebt || 0);
+          },
           0
         );
         

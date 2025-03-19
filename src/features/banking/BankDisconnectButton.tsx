@@ -1,95 +1,90 @@
 // src/features/banking/BankDisconnectButton.tsx
-import { useState, useCallback } from 'react';
-import { forceDisconnectAndReload } from './forceDisconnect';
+import { useState } from 'react';
+import { DisconnectionOptions } from './bankConnectionService';
 
 interface BankDisconnectButtonProps {
-  onDisconnect: () => void;
-  isConnected: boolean;
-  className?: string;
+  onDisconnect: (options?: DisconnectionOptions) => Promise<boolean>;
+  variant?: 'default' | 'small' | 'danger';
+  buttonText?: string;
+  reloadPage?: boolean;
 }
 
 export function BankDisconnectButton({ 
   onDisconnect, 
-  isConnected,
-  className = ""
+  variant = 'default',
+  buttonText,
+  reloadPage = false
 }: BankDisconnectButtonProps) {
-  const [confirming, setConfirming] = useState(false);
-  const [showForceOption, setShowForceOption] = useState(false);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
   
-  const handleDisconnect = useCallback(() => {
-    if (confirming) {
-      // Actually disconnect
-      onDisconnect();
-      setConfirming(false);
-    } else {
-      // Show confirmation first
-      setConfirming(true);
-    }
-  }, [confirming, onDisconnect]);
-  
-  const forceDisconnect = useCallback(() => {
-    // Perform a complete cleanup
-    forceDisconnectAndReload();
+  const handleDisconnect = async () => {
+    if (isDisconnecting) return;
     
-    // Reset UI state
-    setConfirming(false);
-    setShowForceOption(false);
-  }, []);
+    const confirmMessage = reloadPage 
+      ? 'This will disconnect your bank account and reload the page. Continue?' 
+      : 'Disconnect your bank account?';
+      
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+    
+    setIsDisconnecting(true);
+    
+    try {
+      // Set disconnection options
+      const options: DisconnectionOptions = {
+        reloadPage,
+        clearStoredData: true,
+        preventAutoReconnect: true
+      };
+      
+      await onDisconnect(options);
+      
+      // If not reloading, reset the state
+      if (!reloadPage) {
+        setIsDisconnecting(false);
+      }
+    } catch (error) {
+      console.error('Error disconnecting bank:', error);
+      setIsDisconnecting(false);
+    }
+  };
   
-  const cancelDisconnect = useCallback(() => {
-    setConfirming(false);
-    setShowForceOption(false);
-  }, []);
-  
-  if (!isConnected) {
-    return null;
+  // Default text based on variant and state
+  let text = buttonText;
+  if (!text) {
+    if (isDisconnecting) {
+      text = 'Disconnecting...';
+    } else {
+      text = variant === 'danger' ? 'Disconnect Bank' : 'Disconnect';
+    }
   }
   
-  if (confirming) {
-    return (
-      <div className={`flex flex-col space-y-2 ${className}`}>
-        <div className="flex space-x-2">
-          <button
-            onClick={handleDisconnect}
-            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm"
-          >
-            Confirm Disconnect
-          </button>
-          <button
-            onClick={cancelDisconnect}
-            className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-3 py-1 rounded text-sm"
-          >
-            Cancel
-          </button>
-        </div>
-        
-        {!showForceOption && (
-          <button
-            onClick={() => setShowForceOption(true)}
-            className="text-xs text-gray-500 underline"
-          >
-            Connection issues?
-          </button>
-        )}
-        
-        {showForceOption && (
-          <button
-            onClick={forceDisconnect}
-            className="bg-red-800 hover:bg-red-900 text-white px-3 py-1 rounded text-xs"
-          >
-            Force Full Disconnect
-          </button>
-        )}
-      </div>
-    );
+  // Styles based on variant
+  let className = '';
+  
+  switch (variant) {
+    case 'danger':
+      className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded font-medium text-sm';
+      break;
+    case 'small':
+      className = 'text-gray-600 hover:text-gray-800 underline text-sm';
+      break;
+    default:
+      className = 'bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1 rounded text-sm';
+  }
+  
+  if (isDisconnecting) {
+    className = className.replace('hover:', '') + ' opacity-75 cursor-not-allowed';
   }
   
   return (
     <button
       onClick={handleDisconnect}
-      className={`text-red-600 hover:text-red-800 text-sm underline ${className}`}
+      disabled={isDisconnecting}
+      className={className}
     >
-      Disconnect Bank
+      {text}
     </button>
   );
 }

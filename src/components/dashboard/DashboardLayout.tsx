@@ -3,13 +3,11 @@
 
 import { User } from "firebase/auth";
 import { ReactNode } from "react";
-import { DisconnectBankButton } from "@/features/banking/DisconnectBankButton";
 
 interface DashboardLayoutProps {
   children: ReactNode;
   user: User | null;
   onLogout: () => void;
-  onDisconnectBank?: () => void;
   isBankConnected?: boolean;
 }
 
@@ -17,7 +15,6 @@ export function DashboardLayout({
   children, 
   user, 
   onLogout, 
-  onDisconnectBank,
   isBankConnected = false
 }: DashboardLayoutProps) {
   return (
@@ -36,19 +33,13 @@ export function DashboardLayout({
 
             {/* User menu */}
             <div className="flex items-center space-x-4">
-              {/* Bank connection status */}
+              {/* Bank connection status - only showing status, no disconnect button */}
               {isBankConnected && (
                 <div className="hidden sm:flex items-center">
                   <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full flex items-center">
                     <span className="h-2 w-2 bg-green-500 rounded-full mr-1"></span>
                     Connected
                   </span>
-                  {onDisconnectBank && (
-                    <DisconnectBankButton 
-                      onDisconnect={onDisconnectBank}
-                      isConnected={isBankConnected}
-                    />
-                  )}
                 </div>
               )}
               

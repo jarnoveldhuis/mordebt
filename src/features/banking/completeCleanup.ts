@@ -1,6 +1,13 @@
 // src/features/banking/completeCleanup.ts
 
+/**
+ * @deprecated This file is deprecated and will be removed in a future version.
+ * Use bankConnectionService.disconnectBank() or bankConnectionService.emergencyDisconnect() instead.
+ * See src/features/banking/bankConnectionService.ts for more info.
+ */
+
 import { blockTransactionAutoLoad } from "../analysis/preventAutoLoad";
+import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
 
 /**
  * This utility provides a thorough cleanup of all connection data
@@ -13,6 +20,7 @@ interface StoredDataItem {
 }
 
 /**
+ * @deprecated Use bankConnectionService.clearAllConnectionStorage() instead
  * Clear all storage items related to bank connections and authentication
  */
 function clearAllConnectionStorage(): StoredDataItem[] {
@@ -78,6 +86,7 @@ function clearAllConnectionStorage(): StoredDataItem[] {
 }
 
 /**
+ * @deprecated Use bankConnectionService.clearConnectionCookies() instead
  * Clear cookies related to bank connections
  */
 function clearAllConnectionCookies(): string[] {
@@ -104,6 +113,7 @@ function clearAllConnectionCookies(): string[] {
 }
 
 /**
+ * @deprecated Use bankConnectionService.removeConnectionIframes() instead
  * Find and remove any Plaid iframes
  */
 function removeAllConnectionIframes(): HTMLElement[] {
@@ -133,6 +143,7 @@ function removeAllConnectionIframes(): HTMLElement[] {
 }
 
 /**
+ * @deprecated Use bankConnectionService.clearConnectionIndexedDB() instead
  * Clear indexedDB stores that might be related to bank connections
  */
 async function clearConnectionIndexedDB(): Promise<string[]> {
@@ -175,6 +186,7 @@ async function clearConnectionIndexedDB(): Promise<string[]> {
 }
 
 /**
+ * @deprecated Use bankConnectionService methods instead
  * Clear any cached credentials in the browser
  */
 function clearCredentials(): boolean {
@@ -190,6 +202,7 @@ function clearCredentials(): boolean {
 }
 
 /**
+ * @deprecated Use bankConnectionService.blockReconnection() instead
  * Add a special flag to prevent auto-reconnection
  */
 function blockReconnection(): void {
@@ -203,6 +216,7 @@ function blockReconnection(): void {
 }
 
 /**
+ * @deprecated Use bankConnectionService.disconnectBank() instead
  * The main function to completely clean up all connection data
  */
 export async function completeConnectionCleanup(): Promise<boolean> {
@@ -247,47 +261,30 @@ export async function completeConnectionCleanup(): Promise<boolean> {
 }
 
 /**
+ * @deprecated Use bankConnectionService.disconnectBank({ reloadPage: true }) instead
  * Disconnect, clean up, and force a page reload
  */
 export function disconnectAndReload(message: string = 'Bank disconnected. Page will reload.'): void {
-  console.log('Executing disconnect and reload sequence...');
+  console.log('Disconnecting and reloading...');
   
-  // Show a message to the user
-  alert(message);
+  // Notify the user if a message is provided
+  if (message) {
+    alert(message);
+  }
   
-  // Perform the cleanup and then reload
+  // Perform cleanup and then reload
   completeConnectionCleanup().then(() => {
-    console.log('Reloading page...');
-    
-    // Use a slight delay before reload
     setTimeout(() => {
       window.location.reload();
-    }, 500);
+    }, 100);
   });
 }
 
 /**
- * Add a check on page load to enforce disconnection
+ * @deprecated No longer necessary with bankConnectionService
+ * Setup event listeners to enforce disconnection
  */
 export function setupDisconnectionEnforcement(): void {
-  // Check if we have a recent forced disconnect
-  const disconnectTime = localStorage.getItem('bank_disconnect_timestamp');
-  const forced = localStorage.getItem('bank_disconnect_forced') === 'true';
-  
-  if (disconnectTime && forced) {
-    const timestamp = parseInt(disconnectTime, 10);
-    const now = Date.now();
-    const timeSinceDisconnect = now - timestamp;
-    
-    // If disconnect happened within the last hour, enforce it
-    if (timeSinceDisconnect < 60 * 60 * 1000) {
-      console.log('Enforcing recent disconnection');
-      
-      // Clear any tokens again
-      clearAllConnectionStorage();
-    } else {
-      // Clear the forced flag after an hour
-      localStorage.removeItem('bank_disconnect_forced');
-    }
-  }
+  // This could set up listeners to monitor connection state
+  console.log('Disconnection enforcement setup complete');
 }

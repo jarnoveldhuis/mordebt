@@ -1,6 +1,12 @@
 // src/features/banking/forceDisconnect.ts
 
 /**
+ * @deprecated This file is deprecated and will be removed in a future version.
+ * Use bankConnectionService.disconnectBank() or bankConnectionService.emergencyDisconnect() instead.
+ * See src/features/banking/bankConnectionService.ts for more info.
+ */
+
+/**
  * A standalone utility that forcefully disconnects from Plaid
  * and clears all related storage, regardless of React state
  * 
@@ -94,6 +100,7 @@ function cleanPlaidStorage(): void {
   }
   
   /**
+   * @deprecated Use bankConnectionService.disconnectBank() instead
    * Primary function to forcefully disconnect from Plaid
    * @returns Promise that resolves to true if successful
    */
@@ -121,6 +128,7 @@ function cleanPlaidStorage(): void {
   }
   
   /**
+   * @deprecated Use bankConnectionService.emergencyDisconnect() instead
    * Nuclear option - disconnect and reload the page
    * @returns never - this function doesn't return
    */
@@ -138,6 +146,7 @@ function cleanPlaidStorage(): void {
   }
   
   /**
+   * @deprecated Use bankConnectionService methods instead
    * Check if we just performed a force disconnect
    * @returns boolean
    */

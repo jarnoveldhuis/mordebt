@@ -1,10 +1,17 @@
 // src/features/banking/connectionReset.ts
 
 /**
+ * @deprecated This file is deprecated and will be removed in a future version.
+ * Use bankConnectionService.disconnectBank() or bankConnectionService.emergencyDisconnect() instead.
+ * See src/features/banking/bankConnectionService.ts for more info.
+ */
+
+/**
  * Helper functions to fully reset bank connections
  */
 
 /**
+ * @deprecated Use bankConnectionService.disconnectBank() instead
  * Completely resets all connection and storage data
  * Use this when normal disconnection functions don't work
  */
@@ -51,6 +58,7 @@ export function forceResetBankConnection(): boolean {
 }
 
 /**
+ * @deprecated Use bankConnectionService developer utilities instead
  * Add this to the window object for debugging
  * Can be called from developer console with: window.resetBankConnection()
  */
@@ -67,6 +75,7 @@ export function exposeResetFunctionGlobally(): void {
 }
 
 /**
+ * @deprecated No longer needed with bankConnectionService
  * Initialize the utility
  * Call this once from a high-level component
  */
