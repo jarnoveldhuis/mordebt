@@ -2,7 +2,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getTransactions } from '@/features/banking/plaidService';
-import { config } from '@/config';
 
 export async function getTransactionsHandler(req: NextRequest) {
   try {

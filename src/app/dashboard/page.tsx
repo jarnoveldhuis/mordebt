@@ -70,8 +70,6 @@ export default function Dashboard() {
   // Bank connection with our custom hook
   const { 
     connectionStatus,
-    transactions: bankTransactions,
-    connectBank,
     disconnectBank,
     clearSavedTransactions
   } = useBankConnection(user);

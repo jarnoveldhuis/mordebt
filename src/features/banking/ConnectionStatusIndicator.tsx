@@ -51,7 +51,7 @@ export function ConnectionStatusIndicator({
             }
           </div>
           <div className="mt-1">
-            If you're having connection issues, try the{' '}
+            If you are having connection issues, try the{' '}
             <button
               onClick={() => {
                 if (confirm('Are you sure you want to force disconnect your bank account?')) {

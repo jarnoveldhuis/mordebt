@@ -154,6 +154,6 @@ function cleanPlaidStorage(): void {
   
   // Expose to window for emergency debugging
   if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-    (window as any).FORCE_DISCONNECT_PLAID = forceDisconnectAndReload;
+    window.FORCE_DISCONNECT_PLAID = forceDisconnectAndReload;
     console.log("🛠️ Emergency disconnect exposed as window.FORCE_DISCONNECT_PLAID()");
   }
