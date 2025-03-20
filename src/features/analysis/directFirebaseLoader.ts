@@ -15,7 +15,7 @@ export async function loadUserTransactions(userId: string): Promise<{
   if (!userId) {
     return {
       transactions: null,
-      totalSocietalDebt: null,
+      totalSocietalDebt: 0,
       error: "No user ID provided"
     };
   }
