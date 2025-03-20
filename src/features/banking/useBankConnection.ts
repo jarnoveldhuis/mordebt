@@ -1,7 +1,12 @@
 // src/features/banking/useBankConnection.ts
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { User } from 'firebase/auth';
-import { Transaction } from '@/shared/types/transactions';
+
+interface Transaction {
+  date: string;
+  name: string;
+  amount: number;
+}
 
 interface ConnectionStatus {
   isConnected: boolean;
@@ -9,18 +14,12 @@ interface ConnectionStatus {
   error: string | null;
 }
 
-interface AccessTokenInfo {
-  token: string;
-  userId: string;
-  timestamp: number;
-}
-
 interface UseBankConnectionResult {
   connectionStatus: ConnectionStatus;
   transactions: Transaction[];
   connectBank: (publicToken: string) => Promise<void>;
   disconnectBank: () => void;
-  autoReconnectBank: () => Promise<boolean>;
+  fetchTransactions: (accessToken: string) => Promise<void>;
 }
 
 export function useBankConnection(user: User | null): UseBankConnectionResult {
@@ -31,181 +30,122 @@ export function useBankConnection(user: User | null): UseBankConnectionResult {
     error: null
   });
 
-  // Function to store access token securely
-  const storeAccessToken = useCallback((accessToken: string) => {
+  // Check for existing connection on component mount
+  useEffect(() => {
     if (!user) return;
     
-    try {
-      // Create token info with user ID and timestamp
-      const tokenInfo: AccessTokenInfo = {
-        token: accessToken,
-        userId: user.uid,
-        timestamp: Date.now()
-      };
-      
-      // Store in localStorage - in a real app, consider more secure options
-      localStorage.setItem('plaid_access_token_info', JSON.stringify(tokenInfo));
-      console.log("🔐 Access token stored successfully");
-    } catch (error) {
-      console.warn("Could not store access token:", error);
-    }
-  }, [user]);
-  
-  // Function to retrieve stored access token
-  const getStoredAccessToken = useCallback((): string | null => {
-    if (!user) return null;
+    // Check if we have a stored token
+    const storedData = localStorage.getItem('plaid_access_token_info');
+    if (!storedData) return;
     
     try {
-      const storedData = localStorage.getItem('plaid_access_token_info');
-      if (!storedData) return null;
+      // Parse the token info
+      const tokenInfo = JSON.parse(storedData);
       
-      const tokenInfo: AccessTokenInfo = JSON.parse(storedData);
-      
-      // Verify the token belongs to current user
+      // Verify it belongs to current user
       if (tokenInfo.userId !== user.uid) {
         console.warn("Stored token belongs to a different user");
         localStorage.removeItem('plaid_access_token_info');
-        return null;
+        return;
       }
       
-      // Verify token isn't too old (30 days expiry)
+      // Verify token isn't too old (30 days)
       const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
       if (Date.now() - tokenInfo.timestamp > thirtyDaysMs) {
         console.warn("Stored token has expired");
         localStorage.removeItem('plaid_access_token_info');
-        return null;
+        return;
       }
       
-      return tokenInfo.token;
-    } catch (error) {
-      console.warn("Error retrieving stored access token:", error);
-      return null;
-    }
-  }, [user]);
-
-  // Function to fetch transactions with a given access token
-  const fetchTransactions = useCallback(async (accessToken: string): Promise<Transaction[]> => {
-    const response = await fetch("/api/banking/transactions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ access_token: accessToken }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to retrieve transactions: ${response.status}`);
-    }
-
-    const transactionsData = await response.json();
-    
-    // Initialize transactions with analysis placeholders
-    return transactionsData.map((tx: Transaction) => ({
-      ...tx,
-      societalDebt: 0,
-      unethicalPractices: [],
-      ethicalPractices: [],
-      information: {},
-      analyzed: false
-    }));
-  }, []);
-
-  // Connect bank function - called after Plaid Link success
-  const connectBank = useCallback(async (publicToken: string) => {
-    if (!publicToken) {
-      setConnectionStatus({
-        isConnected: false,
-        isLoading: false,
-        error: "No public token provided"
-      });
-      return;
-    }
-
-    setConnectionStatus({
-      isConnected: false,
-      isLoading: true,
-      error: null
-    });
-
-    try {
-      // Exchange public token for access token
-      const tokenResponse = await fetch("/api/banking/exchange_token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ public_token: publicToken }),
-      });
-
-      if (!tokenResponse.ok) {
-        throw new Error("Failed to exchange Plaid token");
-      }
-
-      const tokenData = await tokenResponse.json();
+      console.log("Found existing bank connection");
       
-      if (!tokenData.access_token) {
-        throw new Error("No access token received from Plaid");
-      }
-
-      // Store the access token securely
-      storeAccessToken(tokenData.access_token);
-
-      // Mark connection as successful even before retrieving transactions
+      // Set connected state
       setConnectionStatus({
         isConnected: true,
+        isLoading: false,
+        error: null
+      });
+      
+      // Load transactions using the stored token
+      fetchTransactions(tokenInfo.token);
+    } catch (error) {
+      console.error("Error checking stored token:", error);
+      // Clear invalid token
+      localStorage.removeItem('plaid_access_token_info');
+    }
+  }, [user]);
+  
+  // Function to fetch transactions
+  const fetchTransactions = useCallback(async (accessToken: string) => {
+    if (!accessToken || !user) return;
+    
+    try {
+      setConnectionStatus(prev => ({
+        ...prev,
+        isLoading: true,
+        error: null
+      }));
+      
+      const response = await fetch('/api/banking/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: accessToken })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch transactions');
+      }
+      
+      const data = await response.json();
+      setTransactions(data);
+      
+      setConnectionStatus(prev => ({
+        ...prev,
+        isConnected: true,
+        isLoading: false
+      }));
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+      setConnectionStatus(prev => ({
+        ...prev,
+        isLoading: false,
+        error: 'Failed to load transactions'
+      }));
+    }
+  }, [user]);
+  
+  // Connect bank function
+  const connectBank = useCallback(async (publicToken: string) => {
+    if (!user) return;
+    
+    try {
+      setConnectionStatus({
+        isConnected: false,
         isLoading: true,
         error: null
       });
-
-      // Now get transactions
-      const fetchedTransactions = await fetchTransactions(tokenData.access_token);
-      setTransactions(fetchedTransactions);
       
-      setConnectionStatus({
-        isConnected: true,
-        isLoading: false,
-        error: null
+      // Exchange the public token for an access token
+      const response = await fetch('/api/banking/exchange_token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ public_token: publicToken })
       });
       
-    } catch (error) {
-      console.error("Bank connection error:", error);
+      const data = await response.json();
       
-      setConnectionStatus({
-        isConnected: false,
-        isLoading: false,
-        error: error instanceof Error ? error.message : "Failed to connect bank account"
-      });
-    }
-  }, [storeAccessToken, fetchTransactions]);
-
-  // Auto reconnect function - called on component mount to restore previous connection
-  const autoReconnectBank = useCallback(async (): Promise<boolean> => {
-    // Don't try to reconnect if we're already connected or if there's no user
-    if (connectionStatus.isConnected || !user) {
-      return false;
-    }
-    
-    setConnectionStatus({
-      isConnected: false,
-      isLoading: true,
-      error: null
-    });
-    
-    try {
-      // Try to get the stored access token
-      const accessToken = getStoredAccessToken();
-      
-      if (!accessToken) {
-        console.log("No stored access token found - cannot auto-reconnect");
-        setConnectionStatus({
-          isConnected: false,
-          isLoading: false,
-          error: null // Don't show error for this case
-        });
-        return false;
+      if (!response.ok || !data.access_token) {
+        throw new Error(data.error || 'Failed to exchange token');
       }
       
-      console.log("🔄 Auto-reconnecting with stored access token");
+      // Store the access token securely
+      const tokenInfo = {
+        token: data.access_token,
+        userId: user.uid,
+        timestamp: Date.now()
+      };
       
-      // Verify the access token is still valid by fetching transactions
-      const fetchedTransactions = await fetchTransactions(accessToken);
-      setTransactions(fetchedTransactions);
+      localStorage.setItem('plaid_access_token_info', JSON.stringify(tokenInfo));
       
       // Update connection status
       setConnectionStatus({
@@ -214,30 +154,26 @@ export function useBankConnection(user: User | null): UseBankConnectionResult {
         error: null
       });
       
-      console.log("✅ Auto-reconnect successful");
-      return true;
+      // Fetch transactions with the new token
+      fetchTransactions(data.access_token);
+      
     } catch (error) {
-      console.error("Auto-reconnect failed:", error);
-      
-      // Clear the stored token since it's invalid
-      localStorage.removeItem('plaid_access_token_info');
-      
+      console.error('Error connecting bank:', error);
       setConnectionStatus({
         isConnected: false,
         isLoading: false,
-        error: null // Don't show error to user for auto-reconnect
+        error: error instanceof Error ? error.message : 'Failed to connect bank'
       });
-      
-      return false;
     }
-  }, [connectionStatus.isConnected, user, getStoredAccessToken, fetchTransactions]);
-
-  // Disconnect bank function
+  }, [user, fetchTransactions]);
+  
+  // Disconnect bank function - simple and reliable
   const disconnectBank = useCallback(() => {
-    console.log("Disconnecting bank account");
-    
-    // Clear stored access token
+    // Clear token from all possible storage locations
     localStorage.removeItem('plaid_access_token_info');
+    localStorage.removeItem('plaid_token');
+    localStorage.removeItem('plaid_access_token');
+    sessionStorage.removeItem('plaid_link_token');
     
     // Reset state
     setTransactions([]);
@@ -246,22 +182,15 @@ export function useBankConnection(user: User | null): UseBankConnectionResult {
       isLoading: false,
       error: null
     });
+    
+    console.log("Bank disconnected successfully");
   }, []);
-
-  // Auto-reconnect on initial load
-  useEffect(() => {
-    if (user && !connectionStatus.isConnected && !connectionStatus.isLoading) {
-      autoReconnectBank().catch(err => {
-        console.error("Error in auto-reconnect:", err);
-      });
-    }
-  }, [user, connectionStatus.isConnected, connectionStatus.isLoading, autoReconnectBank]);
-
+  
   return {
     connectionStatus,
     transactions,
     connectBank,
     disconnectBank,
-    autoReconnectBank
+    fetchTransactions
   };
 }

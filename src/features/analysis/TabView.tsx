@@ -32,7 +32,7 @@ export function TabView({
 
   // Set the initial active tab based on whether analysis is completed
   useEffect(() => {
-    if (transactions.length > 0 && totalSocietalDebt !== null) {
+    if (transactions.length > 0 && totalSocietalDebt !== 0) {
       // If transactions are loaded and analyzed, default to impact view
       setActiveTab(initialActiveTab);
     }

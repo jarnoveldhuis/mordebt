@@ -5,6 +5,7 @@ import { useState } from 'react';
 import PlaidLink from "@/features/banking/PlaidLink";
 import { useSampleData } from '@/features/debug/useSampleData';
 import { config } from '@/config';
+import { LoadingSpinner } from "@/shared/components/ui/LoadingSpinner";
 
 // Determine if we're in development/sandbox mode
 const isSandboxMode = process.env.NODE_ENV === 'development' || config.plaid.isSandbox;
@@ -12,12 +13,16 @@ const isSandboxMode = process.env.NODE_ENV === 'development' || config.plaid.isS
 interface PlaidConnectionSectionProps {
   onSuccess: (public_token: string | null) => void;
   isConnected: boolean;
+  isLoading?: boolean;
 }
 
 export function PlaidConnectionSection({ 
   onSuccess, 
-  isConnected 
+  isConnected,
+  isLoading = false
 }: PlaidConnectionSectionProps) {
+  // Add internal loading state
+  const [linkLoading] = useState(false);
   // We're keeping showSampleOption state even though we're not modifying it
   // because it might be needed in the future for UI toggling
   const [showSampleOption] = useState(isSandboxMode);
@@ -38,6 +43,20 @@ export function PlaidConnectionSection({
     console.log("Sample data loaded:", sampleTransactions);
   };
 
+  // Combined loading state from props and internal state
+  const showLoading = isLoading || linkLoading;
+
+  if (showLoading) {
+    return (
+      <div className="flex flex-col items-center">
+        <LoadingSpinner message="Connecting to your bank..." />
+        <p className="text-sm text-gray-500 mt-2">
+          This might take a moment. Please do not close this window.
+        </p>
+      </div>
+    );
+  }
+
   if (isConnected) {
     return (
       <div className="flex flex-col items-center">
@@ -45,7 +64,7 @@ export function PlaidConnectionSection({
           ✓ Bank account connected
         </span>
         <span className="text-xs text-gray-500 mt-1">
-          Use the Disconnect Bank button in the header to connect to a different bank
+          Your transactions are available for analysis.
         </span>
       </div>
     );
@@ -53,7 +72,10 @@ export function PlaidConnectionSection({
 
   return (
     <div className="flex flex-col items-center space-y-3">
-      <PlaidLink onSuccess={onSuccess} />
+      <PlaidLink 
+        onSuccess={onSuccess} 
+        // onLoadingChange={setLinkLoading}
+      />
       
       {/* Sample data option for development */}
       {showSampleOption && (

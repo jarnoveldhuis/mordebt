@@ -18,6 +18,8 @@ export interface Transaction {
   charities?: Record<string, Charity>;
   information?: Record<string, string>; // Information per practice
   analyzed?: boolean;
+  isCreditApplication?: boolean; // Flag to identify when this transaction is a credit application
+  creditApplied?: boolean; // Flag to identify when this transaction has been used for credit
 }
 
 export interface AnalyzedTransactionData {

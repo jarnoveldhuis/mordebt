@@ -2,7 +2,8 @@
 "use client";
 
 import { User } from "firebase/auth";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
+import { DonationModal } from "@/features/charity/DonationModal";
 
 interface CategoryImpact {
   name: string;
@@ -18,6 +19,7 @@ interface DashboardSidebarProps {
   positiveImpact: number;
   topNegativeCategories: CategoryImpact[];
   hasTransactions: boolean;
+  onApplyCredit: (amount: number) => Promise<void>; // Add new prop for applying credit
 }
 
 export function DashboardSidebar({
@@ -25,10 +27,11 @@ export function DashboardSidebar({
   activeView,
   onViewChange,
   totalSocietalDebt,
-  offsetsThisMonth,
+  // offsetsThisMonth,
   positiveImpact,
   topNegativeCategories,
   hasTransactions,
+  onApplyCredit,
 }: DashboardSidebarProps) {
   // Get color based on societal debt
   const getDebtColor = useCallback((debt: number): string => {
@@ -37,9 +40,48 @@ export function DashboardSidebar({
     return "from-red-500 to-pink-600";
   }, []);
 
+  // Track apply button state
+  const [isApplying, setIsApplying] = useState(false);
+  const [lastApplied, setLastApplied] = useState<number | null>(null);
+  const [showFeedback, setShowFeedback] = useState(false);
+
+  // Donation modal state
+  const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
+
+  // Handle applying social credit to debt
+  const handleApplyCredit = async () => {
+    if (positiveImpact <= 0 || isApplying) return;
+
+    try {
+      setIsApplying(true);
+      const amountToApply = positiveImpact;
+
+      await onApplyCredit(amountToApply);
+
+      // Show feedback after successful application
+      setLastApplied(amountToApply);
+      setShowFeedback(true);
+
+      // Hide feedback after 3 seconds
+      setTimeout(() => {
+        setShowFeedback(false);
+      }, 3000);
+    } catch (error) {
+      console.error("Error applying credit:", error);
+      alert("Failed to apply credit. Please try again.");
+    } finally {
+      setIsApplying(false);
+    }
+  };
+
+  // Handle opening donation modal
+  const handleOpenDonationModal = () => {
+    setIsDonationModalOpen(true);
+  };
+
   return (
     <div className="lg:col-span-1">
-      {/* Societal Debt Card */}
+      {/* Societal Credit Score */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
         <div
           className={`bg-gradient-to-r ${getDebtColor(
@@ -47,34 +89,59 @@ export function DashboardSidebar({
           )} p-6 text-white`}
         >
           <div className="text-center">
-            <h2 className="text-xl font-bold mb-1">Societal Debt</h2>
+            <h2 className="text-xl font-bold mb-1">Total Social Debt</h2>
             <div className="text-5xl font-black mb-2">
               ${Math.abs(totalSocietalDebt).toFixed(2)}
             </div>
             <div className="text-sm font-medium">
               {totalSocietalDebt <= 0 ? "Positive Impact" : "Negative Impact"}
             </div>
+
+            {/* Offset All button - shown whenever there's debt */}
+            {totalSocietalDebt > 0 && (
+              <button
+                onClick={handleOpenDonationModal}
+                className="mt-4 bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold shadow transition-colors"
+                title="Offset your social debt through donations"
+              >
+                Offset All
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Debt summary */}
+        {/* Debt summary with Apply button */}
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
-            <span className="text-gray-600">Positive Purchases</span>
-            <span className="font-bold text-green-600">
-              ${positiveImpact.toFixed(2)}
-            </span>
+            <div>
+              <span className="text-gray-600">Social Credit</span>
+              <span className="text-xs text-gray-500 block"></span>
+            </div>
+            <div className="flex items-center">
+              <span className="font-bold text-green-600 mr-2">
+                ${positiveImpact.toFixed(2)}
+              </span>
+              <button
+                onClick={handleApplyCredit}
+                disabled={positiveImpact <= 0 || isApplying}
+                className={`px-3 py-1 rounded-full text-xs text-white ${
+                  positiveImpact <= 0 || isApplying
+                    ? "bg-gray-400 cursor-not-allowed"
+                    : "bg-green-600 hover:bg-green-700"
+                }`}
+                title="Apply credit to reduce your social debt"
+              >
+                {isApplying ? "Applying..." : "Apply"}
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* Negative impact */}
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <span className="text-gray-600">Negative Purchases</span>
-            <span className="font-bold text-red-600">
-              ${offsetsThisMonth.toFixed(2)}
-            </span>
-          </div>
+          {/* Feedback message after applying credit */}
+          {showFeedback && lastApplied && (
+            <div className="mt-2 text-xs text-green-600 animate-fadeIn">
+              ✓ Applied ${lastApplied.toFixed(2)} credit to your social debt
+            </div>
+          )}
         </div>
 
         {/* Navigation */}
@@ -88,17 +155,18 @@ export function DashboardSidebar({
               disabled={!hasTransactions}
             />
             <NavButton
-              label="Impact Summary"
-              isActive={activeView === "impact"}
-              onClick={() => onViewChange("impact")}
-              disabled={!hasTransactions}
-            />
-            <NavButton
               label="Impact by Category"
               isActive={activeView === "grouped-impact"}
               onClick={() => onViewChange("grouped-impact")}
               disabled={!hasTransactions}
             />
+            <NavButton
+              label="Impact Summary"
+              isActive={activeView === "impact"}
+              onClick={() => onViewChange("impact")}
+              disabled={!hasTransactions}
+            />
+
             <NavButton
               label="Categories"
               isActive={activeView === "categories"}
@@ -180,6 +248,16 @@ export function DashboardSidebar({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Donation modal */}
+      {isDonationModalOpen && (
+        <DonationModal
+          practice="All Societal Debt"
+          amount={totalSocietalDebt}
+          isOpen={isDonationModalOpen}
+          onClose={() => setIsDonationModalOpen(false)}
+        />
       )}
     </div>
   );

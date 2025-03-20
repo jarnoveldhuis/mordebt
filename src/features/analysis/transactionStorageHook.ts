@@ -17,7 +17,7 @@ interface TransactionBatch {
 
 interface UseTransactionStorageResult {
   savedTransactions: Transaction[] | null;
-  totalSocietalDebt: number | null;
+  totalSocietalDebt: number;
   isLoading: boolean;
   error: string | null;
   saveTransactions: (transactions: Transaction[], totalDebt: number) => Promise<void>;
@@ -26,7 +26,7 @@ interface UseTransactionStorageResult {
 
 export function useTransactionStorage(user: User | null): UseTransactionStorageResult {
   const [savedTransactions, setSavedTransactions] = useState<Transaction[] | null>(null);
-  const [totalSocietalDebt, setTotalSocietalDebt] = useState<number | null>(null);
+  const [totalSocietalDebt, setTotalSocietalDebt] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -39,7 +39,7 @@ export function useTransactionStorage(user: User | null): UseTransactionStorageR
     if (!user) {
       // Reset state on logout
       setSavedTransactions(null);
-      setTotalSocietalDebt(null);
+      setTotalSocietalDebt(0);
       setError(null);
     }
   }, [user]);

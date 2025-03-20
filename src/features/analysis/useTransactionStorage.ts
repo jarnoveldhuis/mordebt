@@ -18,15 +18,17 @@ interface TransactionBatch {
 
 interface UseTransactionStorageResult {
   savedTransactions: Transaction[] | null;
-  totalSocietalDebt: number | null;
+  totalSocietalDebt: number;
   isLoading: boolean;
   error: string | null;
   saveTransactions: (transactions: Transaction[], totalDebt: number) => Promise<void>;
   loadLatestTransactions: () => Promise<boolean>;
   hasSavedData: boolean;
-  resetStorage: () => void;
+  resetStorage: () => boolean;
   enableDebug: () => void;
   disableDebug: () => void;
+  setTotalSocietalDebt: (debt: number) => void;
+  setSavedTransactions: (transactions: Transaction[]) => void;
 }
 
 // Type for state update function to fix linting errors
@@ -34,7 +36,7 @@ type StateUpdateFunction = () => void;
 
 export function useTransactionStorage(user: User | null): UseTransactionStorageResult {
   const [savedTransactions, setSavedTransactions] = useState<Transaction[] | null>(null);
-  const [totalSocietalDebt, setTotalSocietalDebt] = useState<number | null>(null);
+  const [totalSocietalDebt, setTotalSocietalDebt] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [hasSavedData, setHasSavedData] = useState<boolean>(false);
@@ -46,124 +48,30 @@ export function useTransactionStorage(user: User | null): UseTransactionStorageR
   const previousUserIdRef = useRef<string | null>(null);
   const hasInitializedRef = useRef(false);
   
+  // Add a ref to prevent auto-loading after reset
+  const preventAutoLoadRef = useRef(false);
+  
   // Update userRef when user changes
   useEffect(() => {
     userRef.current = user;
   }, [user]);
-  
-  // Reset the storage state
-  const resetStorage = useCallback(() => {
-    if (mountedRef.current) {
-      console.log("Resetting transaction storage state");
-      setSavedTransactions(null);
-      setTotalSocietalDebt(null);
-      setError(null);
-      setHasSavedData(false);
-      isLoadingRef.current = false;
-    }
-  }, []);
-  
-  // Save transactions to Firestore
-  const saveTransactions = useCallback(async (transactions: Transaction[], totalDebt: number): Promise<void> => {
-    // Store values in local variables to ensure they don't change during execution
-    const currentUser = userRef.current;
-    const isMounted = mountedRef.current;
-    
-    if (!currentUser) {
-      console.warn("Cannot save transactions: no user available");
-      return;
-    }
 
-    if (!isMounted) {
-      console.warn("Cannot save transactions: component unmounted");
-      return;
-    }
-
-    // Skip if we've already saved this session - prevents duplicate saves
-    if (hasSavedData) {
-      console.log("Skip saving - already have saved data this session");
-      return;
-    }
-
-    console.log(`Attempting to save ${transactions.length} transactions to Firebase...`);
-    
-    // Use local state updates that check mounted status
-    const updateState = (stateFn: StateUpdateFunction) => {
-      if (mountedRef.current) {
-        stateFn();
-      }
-    };
-    
-    updateState(() => setIsLoading(true));
-    updateState(() => setError(null));
-
-    try {
-      // Calculate debt percentage
-      const totalSpent = transactions.reduce((sum, tx) => sum + tx.amount, 0);
-      const debtPercentage = totalSpent > 0 ? (totalDebt / totalSpent) * 100 : 0;
-
-      // Create batch document
-      const batch: Omit<TransactionBatch, 'id'> = {
-        userId: currentUser.uid,
-        transactions,
-        totalSocietalDebt: totalDebt,
-        debtPercentage,
-        createdAt: Timestamp.now(),
-      };
-
-      // Log the data being saved
-      firebaseDebug.logWrite('transactionBatches', batch, { status: 'pending' });
-
-      // Add to Firestore
-      const docRef = await addDoc(collection(db, 'transactionBatches'), batch);
-      console.log('✅ Transaction batch saved with ID:', docRef.id);
-      
-      // Log successful write
-      firebaseDebug.logWrite('transactionBatches', batch, { id: docRef.id });
-
-      // Update local state only if component is still mounted
-      if (mountedRef.current) {
-        updateState(() => {
-          setSavedTransactions(transactions);
-          setTotalSocietalDebt(totalDebt);
-          setHasSavedData(true);
-        });
-      }
-    } catch (err) {
-      console.error('❌ Error saving transactions:', err);
-      if (mountedRef.current) {
-        updateState(() => setError('Failed to save transactions'));
-      }
-    } finally {
-      if (mountedRef.current) {
-        updateState(() => setIsLoading(false));
-      }
-    }
-  }, [hasSavedData]);
-
-  // Load latest transaction batch for current user
+  // Function to load the latest transaction batch
+  // Define this before it's used in other functions
   const loadLatestTransactions = useCallback(async (): Promise<boolean> => {
-    // Store values in local variables to avoid closure issues
-    const currentUser = userRef.current;
-    const isMounted = mountedRef.current;
+    // First, check if user manually disconnected
+    if (wasManuallyDisconnected()) {
+      console.log("Not loading transactions - user manually disconnected");
+      return false;
+    }
     
-    if (!currentUser) {
-      console.warn("Cannot load transactions: no user available");
+    // Don't try to reconnect if we're already connected or if there's no user
+    // or if we're preventing auto-load
+    if (!user || isLoadingRef.current || preventAutoLoadRef.current) {
       return false;
     }
 
-    if (!isMounted) {
-      console.warn("Cannot load transactions: component unmounted");
-      return false;
-    }
-
-    // Prevent concurrent loading attempts
-    if (isLoadingRef.current) {
-      console.log("Already loading transactions, skipping duplicate call");
-      return false;
-    }
-
-    console.log(`Loading latest transactions for user ${currentUser.uid}...`);
+    console.log(`Loading latest transactions for user ${user.uid}...`);
     isLoadingRef.current = true;
     
     // Use a safe state update function
@@ -179,14 +87,14 @@ export function useTransactionStorage(user: User | null): UseTransactionStorageR
     try {
       const q = query(
         collection(db, 'transactionBatches'),
-        where('userId', '==', currentUser.uid),
+        where('userId', '==', user.uid),
         orderBy('createdAt', 'desc'),
         limit(1)
       );
 
       // Log the query
       firebaseDebug.logRead('transactionBatches', {
-        userId: currentUser.uid,
+        userId: user.uid,
         orderBy: 'createdAt desc',
         limit: 1
       }, { status: 'pending' });
@@ -195,7 +103,7 @@ export function useTransactionStorage(user: User | null): UseTransactionStorageR
       
       // Log the query results
       firebaseDebug.logRead('transactionBatches', {
-        userId: currentUser.uid,
+        userId: user.uid,
         orderBy: 'createdAt desc',
         limit: 1
       }, { count: querySnapshot.size });
@@ -208,7 +116,7 @@ export function useTransactionStorage(user: User | null): UseTransactionStorageR
       }
       
       if (querySnapshot.empty) {
-        console.log('⚠️ No saved transactions found for user:', currentUser.uid);
+        console.log('⚠️ No saved transactions found for user:', user.uid);
         updateState(() => setIsLoading(false));
         isLoadingRef.current = false;
         return false;
@@ -247,7 +155,140 @@ export function useTransactionStorage(user: User | null): UseTransactionStorageR
       isLoadingRef.current = false;
       return false;
     }
+  }, [user]);
+  
+  // Reset the storage state - with prevention flag
+  const resetStorage = useCallback(() => {
+    if (mountedRef.current) {
+      console.log("Resetting transaction storage state");
+      
+      // Set prevention flag to block auto-loading
+      preventAutoLoadRef.current = true;
+      
+      // Clear storage state
+      setSavedTransactions(null);
+      setTotalSocietalDebt(0);
+      setError(null);
+      setHasSavedData(false);
+      
+      // Reset loading flags
+      isLoadingRef.current = false;
+      
+      // Clear the prevention flag after a delay
+      setTimeout(() => {
+        if (mountedRef.current) {
+          preventAutoLoadRef.current = false;
+        }
+      }, 2000);
+      
+      return true;
+    }
+    return false;
   }, []);
+  
+  // Save transactions to Firestore - with improved error handling
+  const saveTransactions = useCallback(async (transactions: Transaction[], totalDebt: number): Promise<void> => {
+    // Check if user manually disconnected
+    // if (wasManuallyDisconnected()) {
+    //   console.warn("Cannot save transactions: user manually disconnected");
+    //   return;
+    // }
+    
+    // Check if component is mounted right at the start
+    if (!mountedRef.current) {
+      console.warn("Cannot save transactions: component unmounted (early check)");
+      return;
+    }
+    
+    // Store values in local variables to ensure they don't change during execution
+    const currentUser = userRef.current;
+    
+    if (!currentUser) {
+      console.warn("Cannot save transactions: no user available");
+      return;
+    }
+
+    // Double-check if still mounted
+    if (!mountedRef.current) {
+      console.warn("Cannot save transactions: component unmounted (second check)");
+      return;
+    }
+
+    // Skip if we've already saved this session or prevention flag is set
+    if (hasSavedData || preventAutoLoadRef.current) {
+      console.log("Skip saving - already have saved data this session or prevention flag is set");
+      return;
+    }
+
+    console.log(`Attempting to save ${transactions.length} transactions to Firebase...`);
+    
+    // Use local state updates that check mounted status
+    const updateState = (stateFn: StateUpdateFunction) => {
+      if (mountedRef.current) {
+        stateFn();
+      } else {
+        console.warn("Skipping state update - component unmounted");
+      }
+    };
+    
+    // Set loading state safely
+    updateState(() => setIsLoading(true));
+    updateState(() => setError(null));
+
+    try {
+      // One more check before we commit to Firebase
+      if (!mountedRef.current) {
+        console.warn("Aborting Firebase write - component unmounted");
+        return;
+      }
+      
+      // Calculate debt percentage
+      const totalSpent = transactions.reduce((sum, tx) => sum + tx.amount, 0);
+      const debtPercentage = totalSpent > 0 ? (totalDebt / totalSpent) * 100 : 0;
+
+      // Create batch document
+      const batch: Omit<TransactionBatch, 'id'> = {
+        userId: currentUser.uid,
+        transactions,
+        totalSocietalDebt: totalDebt,
+        debtPercentage,
+        createdAt: Timestamp.now(),
+      };
+
+      // Log the data being saved
+      firebaseDebug.logWrite('transactionBatches', batch, { status: 'pending' });
+
+      // Add to Firestore
+      const docRef = await addDoc(collection(db, 'transactionBatches'), batch);
+      console.log('✅ Transaction batch saved with ID:', docRef.id);
+      
+      // Log successful write
+      firebaseDebug.logWrite('transactionBatches', batch, { id: docRef.id });
+
+      // Final mount check before updating state
+      if (!mountedRef.current) {
+        console.warn("Not updating state after Firebase write - component unmounted");
+        return;
+      }
+      
+      // Update local state only if component is still mounted
+      updateState(() => {
+        setSavedTransactions(transactions);
+        setTotalSocietalDebt(totalDebt);
+        setHasSavedData(true);
+        setIsLoading(false); // Ensure we reset loading state
+      });
+    } catch (err) {
+      console.error('❌ Error saving transactions:', err);
+      // Final check before setting error state
+      if (mountedRef.current) {
+        updateState(() => {
+          setError('Failed to save transactions');
+          setIsLoading(false); // Ensure we reset loading state on error
+        });
+      }
+    } 
+  }, [hasSavedData]);
 
   // Handle user changes
   useEffect(() => {
@@ -282,21 +323,53 @@ export function useTransactionStorage(user: User | null): UseTransactionStorageR
     previousUserIdRef.current = currentUserId;
   }, [user, resetStorage]);
 
+  // Add a function to check if disconnect was manual
+  const wasManuallyDisconnected = useCallback((): boolean => {
+    try {
+      // Check if we're in a browser environment
+      if (typeof window === 'undefined' || typeof sessionStorage === 'undefined') {
+        return false;
+      }
+      return sessionStorage.getItem('wasManuallyDisconnected') === 'true';
+    } catch (e) {
+      console.warn('Error checking manual disconnect status:', e);
+      return false;
+    }
+  }, []);
+
   // Auto-load latest transactions only on initial mount or user change
+  // Modified to respect the prevention flag and manual disconnect
   useEffect(() => {
+    // Check if user manually disconnected first
+    if (wasManuallyDisconnected()) {
+      console.log("Auto-loading transactions skipped - user manually disconnected");
+      return;
+    }
+    
     // Only load if:
     // 1. We have a user
     // 2. We haven't already loaded transactions
     // 3. We're not currently loading
     // 4. The component is still mounted
-    if (user && !savedTransactions && !isLoadingRef.current && mountedRef.current) {
+    // 5. The prevention flag is not set
+    if (user && 
+        !savedTransactions && 
+        !isLoadingRef.current && 
+        mountedRef.current &&
+        !preventAutoLoadRef.current) {
+      
       // Store userId to check later if it's still the same
       const userId = user.uid;
       
       // Use a minimal delay to avoid rapid calls during auth state changes
       const loadTimer = setTimeout(() => {
-        // Double-check mounted status and user is still the same
-        if (mountedRef.current && userRef.current?.uid === userId) {
+        // Double-check all conditions again
+        if (mountedRef.current && 
+            userRef.current?.uid === userId && 
+            !isLoadingRef.current && 
+            !preventAutoLoadRef.current &&
+            !wasManuallyDisconnected()) { // Check again inside timeout
+          
           console.log(`Auto-loading transactions for user ${userId}`);
           
           loadLatestTransactions().catch(err => {
@@ -305,17 +378,24 @@ export function useTransactionStorage(user: User | null): UseTransactionStorageR
             }
           });
         }
-      }, 500); // Longer delay to account for React Fast Refresh
+      }, 500); // Delay to account for React Fast Refresh
       
       return () => clearTimeout(loadTimer);
     }
-  }, [user, savedTransactions, loadLatestTransactions]);
+  }, [user, savedTransactions, loadLatestTransactions, wasManuallyDisconnected]);
 
-  // Cleanup effect
+  // Cleanup effect - enhanced for better unmount detection
   useEffect(() => {
+    // Set the mounted flag to true on mount
+    mountedRef.current = true;
+    
+    // Create a cleanup function that runs when the component unmounts
     return () => {
       console.log("Storage hook unmounting, setting mounted flag to false");
       mountedRef.current = false;
+      
+      // Clear any pending operations
+      isLoadingRef.current = false;
     };
   }, []);
 
@@ -329,6 +409,8 @@ export function useTransactionStorage(user: User | null): UseTransactionStorageR
     hasSavedData,
     resetStorage,
     enableDebug: firebaseDebug.enable,
-    disableDebug: firebaseDebug.disable
+    disableDebug: firebaseDebug.disable,
+    setTotalSocietalDebt: setTotalSocietalDebt,
+    setSavedTransactions: setSavedTransactions
   };
 }

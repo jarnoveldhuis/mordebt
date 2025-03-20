@@ -102,7 +102,7 @@ Return ONLY strict JSON with no additional text or markdown:
         "Factory Farming": "Food Insecurity"
     },
     "information": {
-        "Factory Farming": "Relies on industrial meat production with environmental and animal welfare concerns. https://citation.com/mcodonalsfactyfarming"
+        "Factory Farming": "Relies on industrial meat production with environmental and animal welfare concerns."
     }
   },
   {

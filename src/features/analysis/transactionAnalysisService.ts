@@ -193,6 +193,7 @@ ${JSON.stringify({ transactions: sanitizedTransactions })}`
       
       // Use type assertion with the extended interface
       rawResponse = await openai.chat.completions.create(searchParams as OpenAICompletionParams) as ChatCompletion;
+      console.log("Raw Response:",rawResponse)
     } else {
       // For standard models
       rawResponse = await openai.chat.completions.create({
