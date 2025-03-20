@@ -22,7 +22,7 @@ export function PlaidConnectionSection({
   isLoading = false
 }: PlaidConnectionSectionProps) {
   // Add internal loading state
-  const [linkLoading, setLinkLoading] = useState(false);
+  const [linkLoading] = useState(false);
   // We're keeping showSampleOption state even though we're not modifying it
   // because it might be needed in the future for UI toggling
   const [showSampleOption] = useState(isSandboxMode);
@@ -51,7 +51,7 @@ export function PlaidConnectionSection({
       <div className="flex flex-col items-center">
         <LoadingSpinner message="Connecting to your bank..." />
         <p className="text-sm text-gray-500 mt-2">
-          This might take a moment. Please don't close this window.
+          This might take a moment. Please do not close this window.
         </p>
       </div>
     );
@@ -74,7 +74,7 @@ export function PlaidConnectionSection({
     <div className="flex flex-col items-center space-y-3">
       <PlaidLink 
         onSuccess={onSuccess} 
-        onLoadingChange={setLinkLoading}
+        // onLoadingChange={setLinkLoading}
       />
       
       {/* Sample data option for development */}

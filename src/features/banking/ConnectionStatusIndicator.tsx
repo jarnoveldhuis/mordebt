@@ -1,6 +1,6 @@
 // src/features/banking/ConnectionStatusIndicator.tsx
 import { useState } from "react";
-import { BankDisconnectButton } from "./BankDisconnectButton";
+// import { BankDisconnectButton } from "./BankDisconnectButton";
 
 interface ConnectionStatusIndicatorProps {
   isConnected: boolean;
@@ -33,10 +33,10 @@ export function ConnectionStatusIndicator({
           </span>
         </div>
 
-        <BankDisconnectButton
+        {/* <BankDisconnectButton
           onDisconnect={onDisconnect}
           isConnected={isConnected}
-        />
+        /> */}
       </div>
 
       {showDetails && (

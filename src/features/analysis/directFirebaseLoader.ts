@@ -9,7 +9,7 @@ import { Transaction } from '@/shared/types/transactions';
  */
 export async function loadUserTransactions(userId: string): Promise<{
   transactions: Transaction[] | null;
-  totalSocietalDebt: number | null;
+  totalSocietalDebt: number;
   error: string | null;
 }> {
   if (!userId) {
@@ -36,7 +36,7 @@ export async function loadUserTransactions(userId: string): Promise<{
       console.log(`🔍 Direct Firebase Loader: no data found for user ${userId}`);
       return {
         transactions: null,
-        totalSocietalDebt: null,
+        totalSocietalDebt: 0,
         error: null // Not an error, just no data
       };
     }
@@ -56,7 +56,7 @@ export async function loadUserTransactions(userId: string): Promise<{
     console.error('🔍 Direct Firebase Loader: error fetching data:', error);
     return {
       transactions: null,
-      totalSocietalDebt: null,
+      totalSocietalDebt: 0,
       error: error instanceof Error ? error.message : 'Unknown error loading data'
     };
   }

@@ -44,24 +44,24 @@ export function DashboardSidebar({
   const [isApplying, setIsApplying] = useState(false);
   const [lastApplied, setLastApplied] = useState<number | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
-  
+
   // Donation modal state
   const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
 
   // Handle applying social credit to debt
   const handleApplyCredit = async () => {
     if (positiveImpact <= 0 || isApplying) return;
-    
+
     try {
       setIsApplying(true);
       const amountToApply = positiveImpact;
-      
+
       await onApplyCredit(amountToApply);
-      
+
       // Show feedback after successful application
       setLastApplied(amountToApply);
       setShowFeedback(true);
-      
+
       // Hide feedback after 3 seconds
       setTimeout(() => {
         setShowFeedback(false);
@@ -96,10 +96,7 @@ export function DashboardSidebar({
             <div className="text-sm font-medium">
               {totalSocietalDebt <= 0 ? "Positive Impact" : "Negative Impact"}
             </div>
-            <div className="text-xs mt-1 opacity-80">
-              (Negative purchases minus applied credit)
-            </div>
-            
+
             {/* Offset All button - shown whenever there's debt */}
             {totalSocietalDebt > 0 && (
               <button
@@ -107,7 +104,7 @@ export function DashboardSidebar({
                 className="mt-4 bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold shadow transition-colors"
                 title="Offset your social debt through donations"
               >
-                {`Offset All ($${totalSocietalDebt.toFixed(2)})`}
+                Offset All
               </button>
             )}
           </div>
@@ -118,9 +115,7 @@ export function DashboardSidebar({
           <div className="flex items-center justify-between">
             <div>
               <span className="text-gray-600">Social Credit</span>
-              <span className="text-xs text-gray-500 block">
-                (Positive purchases available to apply)
-              </span>
+              <span className="text-xs text-gray-500 block"></span>
             </div>
             <div className="flex items-center">
               <span className="font-bold text-green-600 mr-2">
@@ -131,7 +126,7 @@ export function DashboardSidebar({
                 disabled={positiveImpact <= 0 || isApplying}
                 className={`px-3 py-1 rounded-full text-xs text-white ${
                   positiveImpact <= 0 || isApplying
-                    ? "bg-gray-400 cursor-not-allowed" 
+                    ? "bg-gray-400 cursor-not-allowed"
                     : "bg-green-600 hover:bg-green-700"
                 }`}
                 title="Apply credit to reduce your social debt"
@@ -140,7 +135,7 @@ export function DashboardSidebar({
               </button>
             </div>
           </div>
-          
+
           {/* Feedback message after applying credit */}
           {showFeedback && lastApplied && (
             <div className="mt-2 text-xs text-green-600 animate-fadeIn">
@@ -160,17 +155,18 @@ export function DashboardSidebar({
               disabled={!hasTransactions}
             />
             <NavButton
-              label="Impact Summary"
-              isActive={activeView === "impact"}
-              onClick={() => onViewChange("impact")}
-              disabled={!hasTransactions}
-            />
-            <NavButton
               label="Impact by Category"
               isActive={activeView === "grouped-impact"}
               onClick={() => onViewChange("grouped-impact")}
               disabled={!hasTransactions}
             />
+            <NavButton
+              label="Impact Summary"
+              isActive={activeView === "impact"}
+              onClick={() => onViewChange("impact")}
+              disabled={!hasTransactions}
+            />
+
             <NavButton
               label="Categories"
               isActive={activeView === "categories"}
@@ -253,7 +249,7 @@ export function DashboardSidebar({
           </div>
         </div>
       )}
-      
+
       {/* Donation modal */}
       {isDonationModalOpen && (
         <DonationModal

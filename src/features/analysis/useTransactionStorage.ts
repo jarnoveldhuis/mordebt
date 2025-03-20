@@ -18,7 +18,7 @@ interface TransactionBatch {
 
 interface UseTransactionStorageResult {
   savedTransactions: Transaction[] | null;
-  totalSocietalDebt: number | null;
+  totalSocietalDebt: number;
   isLoading: boolean;
   error: string | null;
   saveTransactions: (transactions: Transaction[], totalDebt: number) => Promise<void>;
@@ -36,7 +36,7 @@ type StateUpdateFunction = () => void;
 
 export function useTransactionStorage(user: User | null): UseTransactionStorageResult {
   const [savedTransactions, setSavedTransactions] = useState<Transaction[] | null>(null);
-  const [totalSocietalDebt, setTotalSocietalDebt] = useState<number | null>(null);
+  const [totalSocietalDebt, setTotalSocietalDebt] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [hasSavedData, setHasSavedData] = useState<boolean>(false);
@@ -167,7 +167,7 @@ export function useTransactionStorage(user: User | null): UseTransactionStorageR
       
       // Clear storage state
       setSavedTransactions(null);
-      setTotalSocietalDebt(null);
+      setTotalSocietalDebt(0);
       setError(null);
       setHasSavedData(false);
       
@@ -189,10 +189,10 @@ export function useTransactionStorage(user: User | null): UseTransactionStorageR
   // Save transactions to Firestore - with improved error handling
   const saveTransactions = useCallback(async (transactions: Transaction[], totalDebt: number): Promise<void> => {
     // Check if user manually disconnected
-    if (wasManuallyDisconnected()) {
-      console.warn("Cannot save transactions: user manually disconnected");
-      return;
-    }
+    // if (wasManuallyDisconnected()) {
+    //   console.warn("Cannot save transactions: user manually disconnected");
+    //   return;
+    // }
     
     // Check if component is mounted right at the start
     if (!mountedRef.current) {

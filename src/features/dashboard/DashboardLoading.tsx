@@ -14,14 +14,14 @@ export function DashboardLoading({ message }: DashboardLoadingProps) {
 
 interface DashboardEmptyStateProps {
   effectiveConnectionStatus: boolean;
-  onDisconnectBank: () => void;
+  // onDisconnectBank: () => void;
   bankConnecting?: boolean;
   isConnecting?: boolean;
 }
 
 export function DashboardEmptyState({ 
   effectiveConnectionStatus,
-  onDisconnectBank,
+  // onDisconnectBank,
   bankConnecting = false,
   isConnecting = false
 }: DashboardEmptyStateProps) {
@@ -30,7 +30,7 @@ export function DashboardEmptyState({
       <div className="flex flex-col items-center justify-center h-64 p-6">
         <LoadingSpinner message="Connecting to your bank..." />
         <p className="text-sm text-gray-500 mt-4">
-          This might take a moment. Please don't close this window.
+          This might take a moment. Please do not close this window.
         </p>
       </div>
     );

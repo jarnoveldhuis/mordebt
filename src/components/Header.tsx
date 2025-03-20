@@ -1,4 +1,4 @@
-// src/shared/components/Header.tsx
+// src/components/Header.tsx
 import { User } from "firebase/auth";
 import { useState, useRef, useEffect } from "react";
 import { DisconnectBankButton } from "@/features/banking/DisconnectBankButton";

@@ -6,7 +6,7 @@ import { DonationModal } from "@/features/charity/DonationModal";
 interface PracticeDebtTableProps {
   practiceDonations: Record<string, { charity: { name: string; url: string } | null; amount: number }>;
   transactions: Transaction[];
-  totalSocietalDebt: number | null;
+  totalSocietalDebt: number;
   selectedCharity?: string | null;
 }
 
@@ -19,7 +19,7 @@ export function PracticeDebtTable({
   const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
 
   // Early return if no data
-  if (totalSocietalDebt === null || Object.keys(practiceDonations).length === 0) {
+  if (totalSocietalDebt === 0 || Object.keys(practiceDonations).length === 0) {
     return null;
   }
 

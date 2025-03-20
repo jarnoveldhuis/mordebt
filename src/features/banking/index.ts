@@ -1,14 +1,12 @@
 // src/features/banking/index.ts
 
 // Core service
-export { bankConnectionService, type DisconnectionOptions } from './bankConnectionService';
+// export { bankConnectionService, type DisconnectionOptions } from './bankConnectionService';
 
 // Hooks
 export { useBankConnection } from './useBankConnection';
 
 // Components
-export { BankDisconnectButton } from './BankDisconnectButton';
-export { EmergencyResetButton } from './EmergencyResetButton';
 export { PlaidConnectionSection } from './PlaidConnectionSection';
 export { PlaidConnection } from './PlaidConnection';
 export { default as PlaidLink } from './PlaidLink';

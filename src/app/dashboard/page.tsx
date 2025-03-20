@@ -1,6 +1,11 @@
+// src/app/dashboard/page.tsx
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
+import { useAuth } from "@/shared/hooks/useAuth";
+import { useBankConnection } from "@/features/banking/useBankConnection";
+import { useTransactionStorage } from "@/features/analysis/useTransactionStorage";
+import { useTransactionAnalysis } from "@/features/analysis/useTransactionAnalysis";
 import { ErrorAlert } from "@/shared/components/ui/ErrorAlert";
 import { config } from "@/config";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
@@ -12,7 +17,8 @@ import { ConsolidatedImpactView } from "@/features/analysis/ConsolidatedImpactVi
 import { CategoryExperimentView } from "@/features/analysis/CategoryExperimentView";
 import { PracticeDebtTable } from "@/features/analysis/PracticeDebtTable";
 import { useSampleData } from "@/features/debug/useSampleData";
-import { useDashboardState } from "@/features/dashboard/useDashboardState";
+
+// Utility functions
 import { 
   calculatePracticeDonations,
   calculatePositiveAmount,
@@ -20,67 +26,139 @@ import {
   calculateNegativeCategories,
   getColorClass
 } from "@/features/dashboard/dashboardUtils";
+
+// Loading components
 import { 
   DashboardLoading, 
   DashboardEmptyState 
 } from "@/features/dashboard/DashboardLoading";
-import { DebugPanel } from "@/features/dashboard/DebugPanel";
-import { EmergencyDisconnect } from '@/features/banking/EmergencyDisconnect';
 
 // Determine if we're in development/sandbox mode
 const isSandboxMode =
   process.env.NODE_ENV === "development" || config.plaid.isSandbox;
 
 export default function Dashboard() {
-  // Use the dashboard state hook to manage state
-  const {
-    user,
-    activeView,
-    showDebugPanel,
-    displayTransactions,
-    totalSocietalDebt,
-    effectiveConnectionStatus,
-    error,
-    hasData,
-    isLoading,
-    authLoading,
-    bankConnecting,
-    
-    setActiveView,
-    setShowDebugPanel,
-    
-    handlePlaidSuccess,
-    handleLoadSampleData: hookHandleLoadSampleData,
-    handleResetTransactions,
-    applyCreditToDebt,
-    logout,
-    
-    loadingMessage
-  } = useDashboardState();
-
-  // Add state to track when connecting is happening
-  const [isConnecting, setIsConnecting] = useState(false);
+  // Authentication
+  const { user, loading: authLoading, logout } = useAuth();
   
-  // Get the sample data generation functions
+  // Bank connection
+  const { 
+    connectionStatus, 
+    connectBank, 
+    disconnectBank 
+  } = useBankConnection(user);
+  
+  // Transaction storage and analysis
+  const {
+    savedTransactions,
+    totalSocietalDebt,
+    isLoading: storageLoading,
+    error: storageError,
+    saveTransactions,
+    hasSavedData
+  } = useTransactionStorage(user);
+  
+  const {
+    analyzedData,
+    analysisStatus,
+    analyzeTransactions
+  } = useTransactionAnalysis();
+  
+  // UI State
+  const [activeView, setActiveView] = useState("transactions");
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [debugConnectionStatus, setDebugConnectionStatus] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("Loading...");
+  
+  // Sample data utility
   const { generateSampleTransactions } = useSampleData();
-
-  // Calculate derived data
+  
+  // Effective connection status combines real status with debug status
+  const effectiveConnectionStatus = connectionStatus.isConnected || debugConnectionStatus;
+  
+  // Display transactions from analyzed data or saved transactions
+  const displayTransactions = analyzedData?.transactions || savedTransactions || [];
+  
+  // Derived data for the UI
   const practiceDonations = calculatePracticeDonations(displayTransactions);
   const positiveAmount = calculatePositiveAmount(displayTransactions);
   const negativeAmount = calculateNegativeAmount(displayTransactions);
   const negativeCategories = calculateNegativeCategories(displayTransactions);
-
-  // Handle loading sample data from debug panel
+  
+  // Determine if we have data to show
+  const hasData = displayTransactions.length > 0;
+  
+  // Combined loading state
+  const isLoading = 
+    connectionStatus.isLoading || 
+    analysisStatus.status === 'loading' || 
+    storageLoading;
+  
+  // Combined error state
+  const error = connectionStatus.error || analysisStatus.error || storageError;
+  
+  // Flag for when bank is connecting
+  const bankConnecting = connectionStatus.isLoading || isConnecting;
+  
+  // Handle loading sample data
   const handleLoadSampleData = useCallback(() => {
     const sampleTransactions = generateSampleTransactions();
-    hookHandleLoadSampleData(sampleTransactions);
-  }, [generateSampleTransactions, hookHandleLoadSampleData]);
-
-  // Handle connect button click with transition state
-  const handleConnectBank = useCallback(() => {
+    
+    // Skip the bank connection process and go straight to analysis
+    analyzeTransactions(sampleTransactions);
+    
+    // Set debug connection status
+    setDebugConnectionStatus(true);
+  }, [generateSampleTransactions, analyzeTransactions]);
+  
+  // Handle Plaid success
+  const handlePlaidSuccess = useCallback(async (publicToken: string | null) => {
     setIsConnecting(true);
+    setLoadingMessage("Connecting to your bank...");
+    
+    try {
+      if (publicToken) {
+        await connectBank(publicToken);
+      } else if (isSandboxMode) {
+        // For sandbox/development, use sample data if no token
+        handleLoadSampleData();
+      }
+    } catch (error) {
+      console.error("Error connecting bank:", error);
+    } finally {
+      setIsConnecting(false);
+    }
+  }, [connectBank, handleLoadSampleData]);
+  
+  // Apply a credit to reduce societal debt
+  const applyCreditToDebt = useCallback(async (amount: number): Promise<void> => {
+    // This would be implemented with actual credit application logic
+    console.log(`Applied ${amount} credit to societal debt`);
+    // In a real implementation, you would update the debt value
+    
+    // Simulate an async operation
+    return new Promise<void>((resolve) => {
+      setTimeout(() => {
+        resolve();
+      }, 500);
+    });
   }, []);
-
+  
+  // Save analyzed transactions to storage
+  useEffect(() => {
+    if (
+      user && 
+      analyzedData && 
+      analyzedData.transactions.length > 0 && 
+      !hasSavedData
+    ) {
+      saveTransactions(
+        analyzedData.transactions,
+        analyzedData.totalSocietalDebt
+      );
+    }
+  }, [user, analyzedData, hasSavedData, saveTransactions]);
+  
   // Get the currently active view component
   const renderActiveView = () => {
     if (isLoading) {
@@ -91,7 +169,7 @@ export default function Dashboard() {
       return (
         <DashboardEmptyState 
           effectiveConnectionStatus={effectiveConnectionStatus}
-          onDisconnectBank={() => {}}
+          // onDisconnectBank={disconnectBank}
           bankConnecting={bankConnecting}
           isConnecting={isConnecting}
         />
@@ -159,6 +237,7 @@ export default function Dashboard() {
     <DashboardLayout
       user={user}
       onLogout={logout}
+      onDisconnectBank={disconnectBank}
       isBankConnected={effectiveConnectionStatus}
     >
       {/* Error display */}
@@ -194,7 +273,7 @@ export default function Dashboard() {
               <PlaidConnectionSection
                 onSuccess={handlePlaidSuccess}
                 isConnected={effectiveConnectionStatus}
-                isLoading={isConnecting || bankConnecting}
+                isLoading={bankConnecting}
               />
             </div>
           )}
@@ -203,37 +282,8 @@ export default function Dashboard() {
           <div className="bg-white rounded-xl shadow-md overflow-hidden">
             {renderActiveView()}
           </div>
-
-          {/* Debug panel */}
-          <DebugPanel
-            user={user}
-            isSandboxMode={isSandboxMode}
-            showDebugPanel={showDebugPanel}
-            onToggleDebugPanel={() => setShowDebugPanel(!showDebugPanel)}
-            onLoadSampleData={handleLoadSampleData}
-            onResetTransactions={handleResetTransactions}
-          />
-
-          {/* Keep the emergency disconnect as a fallback but with modified text */}
-          <div className="mt-4 bg-red-50 border border-red-200 rounded-xl shadow-sm p-4">
-            <h3 className="text-lg font-semibold text-red-800 mb-2">Emergency Reset</h3>
-            <p className="text-sm text-red-700 mb-3">
-              If you're having problems with your bank connection, use this emergency reset button. This will clear all connection data and let you reconnect.
-            </p>
-            <EmergencyDisconnect />
-          </div>
         </div>
       </div>
     </DashboardLayout>
-  );
-}
-
-// Simple version of the client component
-function DashboardClient() {
-  return (
-    <div className="p-4">
-      <h1>Dashboard</h1>
-      <EmergencyDisconnect />
-    </div>
   );
 }
